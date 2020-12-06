@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3 
 # -*- coding: utf-8 -*-
 """
 Created on Mon Nov 30 15:38:35 2020
@@ -7,11 +7,14 @@ Created on Mon Nov 30 15:38:35 2020
 """
 
 import wiringpi
-from time import sleep
+from time import time, sleep
 import math
 import FaBo9Axis_MPU9250
+#!pip3 install pi-ina219
 from ina219 import INA219
-from ina219 import DeviceRangeError
+#from ina219 import DeviceRangeError
+import os
+
 
 
 RUL = 12
@@ -19,11 +22,19 @@ MOTOR_A = 6
 MOTOR_B = 26
 
 RUL_CENTER = 150
-RUL_RIGHT = 200
-RUL_LEFT = 100
+RUL_RIGHT = 180
+RUL_LEFT = 120
 
 SHUNT_OHMS = 0.01
 
+US1_TRIG = 22
+US1_ECHO = 17
+
+US2_TRIG = 24
+US2_ECHO = 23
+
+us = 1e-6
+ms = 1e-3
 
 def setup():
     wiringpi.wiringPiSetupGpio()
@@ -100,18 +111,64 @@ def get_data_imu9250(imu):
         return imu.readAccel(), imu.readGyro(), imu.readMagnet()
     else:
         return None
+    
+def get_distance(triger, echo, timeout = 10 * ms, toPrint = False):
+    pulse_start = 0
+    pulse_end = 0
+    
+    wiringpi.digitalWrite(triger, wiringpi.GPIO.LOW)
+    sleep(0.05)
+    
+    wiringpi.digitalWrite(triger, wiringpi.GPIO.HIGH)
+    sleep(10*us)
+    wiringpi.digitalWrite(triger, wiringpi.GPIO.LOW)
+    
+    start_time = time()
+    while(wiringpi.digitalRead(echo) == wiringpi.GPIO.LOW):
+        pulse_start = time() - start_time
+        if(pulse_start > timeout):
+            if toPrint == True:
+                print("Can't measure pulse, please insure the sensor is connected!")
+            break
+        
+    start_time = time()
+    while(wiringpi.digitalRead(echo) == wiringpi.GPIO.HIGH):
+        pulse_end = time() - start_time
+        if(pulse_end > timeout):
+            if toPrint == True:
+                print("Can't measure pulse, please insure the sensor is connected!")
+            break
+
+ 
+    distance = sound_vel* (pulse_end - pulse_start)*0.5*100
+    distance = abs(round(distance, 2))
+    
+    if toPrint == True:   
+        if distance > 0 and distance < 400:
+            print("Measured distance, cm: {}".format(distance))
+        else:
+            print("No obstacle")
+       
+    return distance
+
 def telemetry(velocity, rotation, ina, imu):
     voltage, current = get_data_ina219(ina)
-
+    if voltage < 7.0:
+        print("Undervoltage detected, shutdown in 1 s")
+        sleep(1)
+        os.system('shutdown now -s')
     acc, gyro, mag = get_data_imu9250(imu)
 
     yaw = yaw_from_mag(mag)
+    
+    US1 = get_distance(US1_TRIG, US1_ECHO)
+    US2 = get_distance(US2_TRIG, US2_ECHO)
 
-    label = "Motors Rul Volts,V  Curs,mA  accX accY accZ gyroX gyroY gyroZ yaw,deg"
+    label = "Motors Rul Volts,V  Curs,mA  accX accY accZ gyroX gyroY gyroZ yaw,deg US1,cm US2,cm"
     print(label)
 
-    string = "{:>6} {:>3} {:7.2f} {:8.2f} {:4.2f} {:4.2f} {:4.2f} {:5.2f} {:5.2f} {:5.2f} {:7.2f}\n".format(velocity, rotation, voltage,
-                                                            current, acc['x'], acc['y'], acc['z'], gyro['x'], gyro['y'], gyro['z'], yaw)
+    string = "{:>6} {:>3} {:7.2f} {:8.2f} {:4.2f} {:4.2f} {:4.2f} {:5.2f} {:5.2f} {:5.2f} {:7.2f} {:6.2f} {:6.2f}\n".format(velocity, rotation, voltage,
+              current, acc['x'], acc['y'], acc['z'], gyro['x'], gyro['y'], gyro['z'], yaw, US1, US2)
     print(string)
 
 setup()
@@ -171,7 +228,7 @@ while(1):
             wiringpi.digitalWrite(MOTOR_B, wiringpi.GPIO.LOW)
     
         telemetry(velocity, rotation, ina, imu)
-        sleep(2)
+        sleep(.5)
     except KeyboardInterrupt:
         velocity, rotation = stop()
         wiringpi.digitalWrite(MOTOR_A, wiringpi.GPIO.LOW)
