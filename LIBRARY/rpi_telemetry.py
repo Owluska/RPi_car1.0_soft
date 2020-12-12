@@ -72,8 +72,8 @@ class mb_telemetry():
     
     def get_data_ina219(self):
         if self.ina != None:
-            self.motors_voltage = self.ina.voltage()
-            self.motors_current = self.ina.current()
+            self.motors_voltage = round(self.ina.voltage(), 2)
+            self.motors_current = round(self.ina.current(), 2)            
             return self.motors_voltage, self.motors_current
         else:
             return None, None
@@ -129,7 +129,7 @@ class mb_telemetry():
         distance = abs(round(distance, 2))
         
            
-        if distance <= 0 or distance > self.sound_vel * (self.timeout)*0.5*100:
+        if distance < 0 or distance > self.sound_vel * (self.timeout) * 100:
                 distance = None            
         return distance
 
