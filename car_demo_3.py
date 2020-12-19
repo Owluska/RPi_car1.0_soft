@@ -7,6 +7,7 @@ Created on Sat Dec 12 15:56:29 2020
 """
 
 from LIBRARY.rpi_car import rpi_movement
+from LIBRARY.rpi_car_mag_calibration import mag_calibrate
 from LIBRARY.rpi_telemetry import mb_telemetry
 from time import sleep
 from datetime import datetime
@@ -14,6 +15,11 @@ from datetime import datetime
 
 car = rpi_movement()
 car.init()
+#offset_x, offset_y, offset_z, scale_x, scale_y, scale_z = mag_calibrate(car)
+#car.magx_oofset = offset_x
+#car.magx_scale = scale_x
+#car.magy_offset = offset_y
+#car.magy_scale = scale_y
 
 label = "Motors Rul Volts,V  Curs,mA  accX accY gyroZ magX magY US1,cm US2,cm"
 name = 'test'

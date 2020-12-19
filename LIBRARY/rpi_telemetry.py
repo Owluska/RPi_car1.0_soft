@@ -41,6 +41,12 @@ class mb_telemetry():
         self.gyroz = None
         self.magx = None
         self.magy = None
+        self.magx_offset = -4.969
+        self.magx_scale = 1.466
+        self.magy_offset = 24.116
+        self.magy_scale = 0.874
+        self.magz_offset = 24.710
+        self.magz_scale = 0.853
 
     def setup_mpu9250(self):
         try:
@@ -80,23 +86,26 @@ class mb_telemetry():
 
     def get_mpu9250_acc(self):
         if self.imu != None:
-            self.accx = self.imu.readAccel()['x']
-            self.accy = self.imu.readAccel()['y']
+            acc = self.imu.readAccel()
+            self.accx = acc['x']
+            self.accy = acc['y']
             return self.accx, self.accy
         else:
             return None, None
         
     def get_mpu9250_gyro(self):
         if self.imu != None:
-            self.gyroz = self.imu.readGyro()['z']
+            gyro = self.imu.readGyro()
+            self.gyroz = gyro['z']
             return self.gyroz
         else:
             return None
     
     def get_mpu9250_mag(self):
         if self.imu != None:
-            self.magx = self.imu.readMagnet()['x']
-            self.magy = self.imu.readMagnet()['y']
+            mag = self.imu.readMagnet()
+            self.magx = (mag['x'] - self.magx_offset) * self.magx_scale
+            self.magy = (mag['y'] - self.magy_offset) * self.magy_scale
             return self.magx, self.magy
         else:
             return None, None    
