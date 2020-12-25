@@ -7,38 +7,51 @@ Created on Sat Dec 12 15:56:29 2020
 """
 
 from LIBRARY.rpi_car import rpi_movement
-from LIBRARY.rpi_car_mag_calibration import mag_calibrate
+from LIBRARY.rpi_car_mag_calibration import write_calibration_file
 from LIBRARY.rpi_telemetry import mb_telemetry
-from time import sleep
+from time import sleep, time
 from datetime import datetime
 
+def create_file(name = 'test', path = '/home/pi/Desktop/RPi_car1.0_soft/output/', label = ''):
+    now = datetime.now()
+    date_time = now.strftime("_%m_%d_%Y_%H_%M_%S")
+    name += date_time
+    f = open(path+name, 'a+')
+    f.write(label)
+    f.write('\n')
+    return f
 
 car = rpi_movement()
 car.init()
-#offset_x, offset_y, offset_z, scale_x, scale_y, scale_z = mag_calibrate(car)
-#car.magx_oofset = offset_x
-#car.magx_scale = scale_x
-#car.magy_offset = offset_y
-#car.magy_scale = scale_y
-
-label = "Motors Rul Volts,V  Curs,mA  accX accY gyroZ magX magY US1,cm US2,cm"
-name = 'test'
-now = datetime.now()
-date_time = now.strftime("_%m_%d_%Y_%H_%M_%S")
-name += date_time
-path = '/home/pi/Desktop/RPi_car1.0_soft/output/'
-f = open(path+name, 'a+')
-f.write(label)
-f.write('\n')
-
 mb = mb_telemetry()
 mb.init_all()
+
+toCalibrate = True
+attempts = 5
+if toCalibrate:
+  write_calibration_file(car, auto = True, attempts = attempts)
+  mb.read_calibration_file()
+  print(mb.magx_offset, mb.magx_scale, mb.magy_offset, mb.magy_scale)
+    
+
+label = "Motors Rul time,s Volts,V  Curs,mA  accX accY gyroZ magX magY US1,cm US2,cm"
+f = create_file(label = label)
+
+
+dt = time()
 rul = 'C'
 motors = 'S'
 
+#t = time()
+
 while(1):
     try:
+        dt = time() - dt
+        mb.time += dt
         print(mb.telemetry())
+        dt = time()
+#        print("dt: ", t)
+        
         
         if(mb.dist1 != None and mb.dist2 != None):
             if(mb.dist1 < 20 and mb.dist2 < 20):
@@ -71,7 +84,7 @@ while(1):
         for d in mb.telemetry():
             f.write(str(d)+' ')
         f.write('\n')
-    
+
     except KeyboardInterrupt:
         car.stop()
         car.turn_center()

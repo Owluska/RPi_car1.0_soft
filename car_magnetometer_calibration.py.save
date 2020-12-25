@@ -1,0 +1,122 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Sat Dec 12 15:56:29 2020
+
+@author: root
+"""
+
+from LIBRARY.rpi_car import rpi_movement
+from LIBRARY.rpi_telemetry import mb_telemetry
+from time import sleep, time
+from datetime import datetime
+import FaBo9Axis_MPU9250
+
+car = rpi_movement()
+car.init()
+
+#label = "Motors Rul Volts,V  Curs,mA  accX accY gyroZ magX magY US1,cm US2,cm"
+#name = 'test'
+#now = datetime.now()
+#date_time = now.strftime("_%m_%d_%Y_%H_%M_%S")
+#name += date_time
+#path = '/home/pi/Desktop/RPi_car1.0_soft/output/'
+#f = open(path+name, 'a+')
+#f.write(label)
+#f.write('\n')
+
+mb = mb_telemetry()
+mb.init_all()
+rul = 'C'
+motors = 'S'
+imu=FaBo9Axis_MPU9250.MPU9250()
+
+#def get_mpu9250_mag(imu):
+#    if imu != None:
+#        mag = imu.readMagnet()
+#        magx = mag['x']
+#        magy = mag['y']
+#        magz = mag['z']
+#        return magx,magy,magz
+#    else:
+#        return None, None, None
+
+def eight_moving(car, mags):
+    if car == None:
+        print("Car data is empty, returning")
+        return
+     
+    car.move_forward()
+     
+    car.turn_right()
+    for i in range(50):
+        mags.append(imu.readMagnet())
+        sleep(0.01)
+#    sleep(0.5)
+     
+    car.turn_left()
+    for i in range(320):
+        mags.append(imu.readMagnet())
+        sleep(0.01)
+#    sleep(3.5)     
+    
+    car.turn_center()
+    for i in range(150):
+        mags.append(imu.readMagnet())
+        sleep(0.01)
+#    sleep(2)
+     
+    car.turn_right()
+    for i in range(300):
+        mags.append(imu.readMagnet())
+        sleep(0.01)
+#    sleep()
+    
+    car.turn_center()
+    car.stop()
+    return mags
+    
+def calibrate(car, imu, auto = False):
+    mags = []
+    if auto:
+        print("Ensure that there is a place about 2 m x 2 m!")
+        mags = eight_moving(car, mags)        
+    else:
+        print("Slowly move car in eight figure pattern")
+        print("Measuring magnetic field....To stop press ""CTRL+C")
+        while(1):
+            try:
+                mags.append(imu.readMagnet())
+                sleep(0.1)
+            except KeyboardInterrupt:
+                print("Measuring stopped.")
+                break
+
+    xs = [m['x'] for m in mags]
+    ys = [m['y'] for m in mags]
+    zs = [m['z'] for m in mags]
+    
+    #hard iron coefficient calculation    
+    offset_x = (max(xs) + min(xs))/2
+    offset_y = (max(ys) + min(ys))/2
+    offset_z = (max(zs) + min(zs))/2
+    
+    #sof iron coefficients calculation
+    avg_delta_x = (max(xs) - min(xs))/2
+    avg_delta_y = (max(ys) - min(ys))/2
+    avg_delta_z = (max(zs) - min(zs))/2
+    
+    avg_delta = (avg_delta_x + avg_delta_y +avg_delta_z) / 3
+    
+    scale_x = avg_delta / avg_delta_x
+    scale_y = avg_delta / avg_delta_y
+    scale_z = avg_delta / avg_delta_z
+    return offset_x, offset_y, offset_z, scale_x, scale_y, scale_z
+
+ 
+     
+t = time()    
+offset_x, offset_y, offset_z, scale_x, scale_y, scale_z = calibrate(car, imu, auto = True)
+t = time()-t
+result = "{:1.1f}:{:6.3f} {:6.3f} {:6.3f} {:6.3f} {:6.3f} {:6.3f}".format(t, offset_x, offset_y, offset_z, scale_x, scale_y, scale_z)
+print(result)

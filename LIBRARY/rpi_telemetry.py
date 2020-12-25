@@ -47,6 +47,8 @@ class mb_telemetry():
         self.magy_scale = 0.874
         self.magz_offset = 24.710
         self.magz_scale = 0.853
+        
+        self.time = 0
 
     def setup_mpu9250(self):
         try:
@@ -104,13 +106,14 @@ class mb_telemetry():
     def get_mpu9250_mag(self):
         if self.imu != None:
             mag = self.imu.readMagnet()
-            self.magx = (mag['x'] - self.magx_offset) * self.magx_scale
-            self.magy = (mag['y'] - self.magy_offset) * self.magy_scale
+            self.magx = round((mag['x'] - self.magx_offset) * self.magx_scale, 2)
+            self.magy = round((mag['y'] - self.magy_offset) * self.magy_scale, 2)
             return self.magx, self.magy
         else:
             return None, None    
     
     def get_distance(self, triger, echo):
+#        sleep(0.05)
         pulse_start = 0
         pulse_end = 0
         
@@ -143,11 +146,32 @@ class mb_telemetry():
         return distance
 
     def telemetry(self):    
+        self.time = round(self.time, 3)
         self.motors_voltage, self.motors_current = self.get_data_ina219()
+        sleep(0.01)
+        
         self.accx, self.accy = self.get_mpu9250_acc()
+        sleep(0.01)
+        
         self.gyroz = self.get_mpu9250_gyro()
+        sleep(0.01)
+        
         self.magx, self.magy = self.get_mpu9250_mag()
+        sleep(0.01)
+        
         self.dist1 = self.get_distance(self.US1_TRIG, self.US1_ECHO)
+        sleep(0.038)
         self.dist2 = self.get_distance(self.US2_TRIG, self.US2_ECHO)
-        return [self.motors_voltage, self.motors_current, self.accx, self.accy, 
+        sleep(0.038)
+        
+        return [self.time, self.motors_voltage, self.motors_current, self.accx, self.accy, 
                 self.gyroz, self.magx, self.magy, self.dist1, self.dist2]
+        
+    def read_calibration_file(self, path = '/home/pi/Desktop/RPi_car1.0_soft/calibration_data/mag'):
+        mf = open(path)
+        calib_str = mf.read()
+
+        self.magx_offset = float(calib_str[10:17])
+        self.magx_scale = float(calib_str[27:34])
+        self.magy_offset = float(calib_str[45:52])
+        self.magy_scale = float(calib_str[62:69])

@@ -9,6 +9,7 @@ Created on Sat Dec 12 15:56:29 2020
 from LIBRARY.rpi_car import rpi_movement
 from time import sleep
 import FaBo9Axis_MPU9250
+from datetime import datetime
 
 car = rpi_movement()
 car.init()
@@ -62,7 +63,14 @@ def mag_calibrate(car, auto = False):
     mags = []
     if auto:
         print("Ensure that there is a place about 3 m x 2 m!")
-        mags = eight_moving(imu, car, mags)        
+        for i in range(500):
+            if i%100 == 0:
+                print("--->" * int(i/100), end ='')
+            sleep(0.01)
+        
+        print()
+        mags = eight_moving(imu, car, mags)
+
     else:
         print("Slowly move car in eight figure pattern")
         print("Measuring magnetic field....To stop press ""CTRL+C")
@@ -94,12 +102,49 @@ def mag_calibrate(car, auto = False):
     scale_y = avg_delta / avg_delta_y
     scale_z = avg_delta / avg_delta_z
     
-    result = "{:6.3f} {:6.3f} {:6.3f} {:6.3f} {:6.3f} {:6.3f}".format(offset_x, offset_y, offset_z, scale_x, scale_y, scale_z)
+#    result = "{:6.3f} {:6.3f} {:6.3f} {:6.3f} {:6.3f} {:6.3f}".format(offset_x, offset_y, offset_z, scale_x, scale_y, scale_z)
+    result = "{:7.3f} {:7.3f} {:7.3f} {:7.3f}".format(offset_x, scale_x, offset_y, scale_y)
     print(result)
     
     return offset_x, offset_y, offset_z, scale_x, scale_y, scale_z
 
- 
+def create_file(name = 'test', path = '/home/pi/Desktop/RPi_car1.0_soft/output/', label = '', addData = False):
+    if addData:
+        now = datetime.now()
+        date_time = now.strftime("_%m_%d_%Y_%H_%M_%S")
+        name += date_time
+    f = open(path+name, 'w')
+    return f
+
+def write_calibration_file(car, auto = False, attempts = 1, path = '/home/pi/Desktop/RPi_car1.0_soft/calibration_data/'):
+    name = 'mag'
+    mf = create_file(name = name,  path = path)
+    data = []
+    offset_x, scale_x, offset_y, scale_y = 0,0,0,0
+    for i in range(attempts):
+#        
+#        offset_x += offset_x
+#        scale_x += scale_x
+#        offset_y += offset_y
+#        scale_y += scale_y
+        
+        data.append(mag_calibrate(car, auto = auto))
+        
+    for d in data:
+        offset_x += d[0]
+        scale_x += d[3]
+        offset_y += d[1]
+        scale_y += d[4]
+        
+    offset_x /= attempts
+    scale_x /= attempts
+    offset_y /= attempts
+    scale_y /= attempts
+    
+    s = "x_offset: {:7.3f},x_scale: {:7.3f},y_offset: {:7.3f},y_scale: {:7.3f}".format(offset_x, scale_x, offset_y, scale_y)
+    mf.write(s)
+    mf.close()
+    
      
 #t = time()    
 #offset_x, offset_y, offset_z, scale_x, scale_y, scale_z = calibrate(car, imu, auto = True)
