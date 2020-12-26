@@ -26,10 +26,10 @@ car.init()
 mb = mb_telemetry()
 mb.init_all()
 
-toCalibrate = True
+toCalibrate = False
 attempts = 5
 if toCalibrate:
-  write_calibration_file(car, auto = True, attempts = attempts)
+  write_calibration_file(car, auto = False, attempts = attempts)
   mb.read_calibration_file()
   print(mb.magx_offset, mb.magx_scale, mb.magy_offset, mb.magy_scale)
     
