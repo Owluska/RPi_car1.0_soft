@@ -167,7 +167,7 @@ class mb_telemetry():
         return [self.time, self.motors_voltage, self.motors_current, self.accx, self.accy, 
                 self.gyroz, self.magx, self.magy, self.dist1, self.dist2]
         
-    def read_calibration_file(self, path = '/home/pi/Desktop/RPi_car1.0_soft/calibration_data/mag'):
+    def read_mag_calibration_file(self, path = '/home/pi/Desktop/RPi_car1.0_soft/calibration_data/mag'):
         mf = open(path)
         calib_str = mf.read()
 
