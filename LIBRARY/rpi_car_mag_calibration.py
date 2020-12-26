@@ -25,7 +25,7 @@ def eight_moving(imu, car, mags):
     car.move_forward()
      
     car.turn_right()
-    for i in range(50):
+    for i in range(30):
         mags.append(imu.readMagnet())
         sleep(0.01)
 #    sleep(0.5)
@@ -37,7 +37,7 @@ def eight_moving(imu, car, mags):
 #    sleep(3.5)     
     
     car.turn_center()
-    for i in range(80):
+    for i in range(50):
         mags.append(imu.readMagnet())
         sleep(0.01)
 #    sleep(2)
