@@ -15,6 +15,7 @@ import math
 import numpy as np
 from filterpy.common import Q_discrete_white_noise
 from filterpy.kalman import KalmanFilter
+import matplotlib.pyplot as plt
 
 def create_file(name = 'test', path = '/home/pi/Desktop/RPi_car1.0_soft/output/', label = ''):
     now = datetime.now()
@@ -25,12 +26,12 @@ def create_file(name = 'test', path = '/home/pi/Desktop/RPi_car1.0_soft/output/'
     f.write('\n')
     return f
 
-def yaw_from_mags(telemetry):
-    magx = telemetry[6]
-    magy = telemetry[7]
+def yaw_from_mags(board):
+    magx = board.magx
+    magy = board.magy
     R2D = 180/math.pi
     yaw = round(math.atan2(-magy, magx) * R2D, 3)
-    return magx, magy, yaw
+    return yaw
 
 #def yaw_from_gyro_rk4(gyros, telemetry):
 #    dt = telemetry[0]
@@ -58,9 +59,10 @@ def yaw_from_mags(telemetry):
 #    return dt, g_1, round(yaw, 3)
     
 
-def yaw_from_gyro_euler(gyros, telemetry):
-    dt = telemetry[0]
-    gyros.append(telemetry[5])
+def yaw_from_gyro_euler(gyros, board):
+    dt = board.time
+    gyros.append(board.gyroz)
+    
     length = len(gyros)
     if length == 0:
         return 0
@@ -70,8 +72,9 @@ def yaw_from_gyro_euler(gyros, telemetry):
         yaw = gyros[-2] + gyros[-1]*dt
 
     if abs(yaw) > 180:
-        yaw = 180 + yaw % (-360)
-    return dt, gyros[-1], round(yaw, 3)
+        yaw = -180 + yaw % (360)
+    yaw = round(yaw,3)
+    return yaw, gyros
 
 
 def complementary_filter(data1, data2, alpha = 1):
@@ -79,20 +82,20 @@ def complementary_filter(data1, data2, alpha = 1):
     output = round(output, 3)
     return output
 
-def kalman_filter_init(telemetry, yaw = 0, gyro = 0):
+def kalman_filter_init(board, yaw = 0, gyro = 0):
     tracker = KalmanFilter(dim_x=2, dim_z=2)
-    dt = telemetry[0]
+    dt = board.time
     tracker.F = np.array([[1, dt],
                           [0,  1]])
     tracker.H = np.array([[1, 0],
                           [0, 1]])
     
-    gyroz_std = 0.04659871242856395
-    yaw_rm_std = 2.4556563053489393
-    tracker.R = np.array([[gyroz_std,          0],
-                          [        0, yaw_rm_std]])
+    gyro_std = 0.04659871242856395
+    yaw_std = 2.4556563053489393
+    tracker.R = np.array([[yaw_std,          0],
+                          [        0, gyro_std]])
     
-    Q = Q_discrete_white_noise(dim=2, dt = dt, var = 0.1)
+    Q = Q_discrete_white_noise(dim=2, dt = dt, var = 0.01)
 #    Q = np.array([[Q[0][0], Q[0][1]],
 #                  [Q[1][0], Q[1][1]]])
     tracker.Q = Q
@@ -102,6 +105,33 @@ def kalman_filter_init(telemetry, yaw = 0, gyro = 0):
     tracker.z = np.array(z_0)
     tracker.x = np.array(z_0)
     return tracker
+
+def kalman_filter_get_prediction(tracker, board, gyro_std, yaw_std):
+
+    kf.R = np.array([[yaw_std,          0],
+                      [        0, gyro_std]])
+    
+    kf.z = np.array([yaw_from_mags(board), board.gyroz])
+    
+    kf.predict()
+    kf.update(kf.z)
+    yaw_kf = round(kf.x[0], 3)
+    
+    return kf.z[0], yaw_kf
+    
+def plot_data_n_labels(x, ys, title = '', xlabel = '',
+                       ylabel = '', legend =None):
+    fig = plt.figure(figsize = (10,10))
+    
+    for y in ys:
+        plt.plot(x,y)
+    plt.title(title)
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
+    
+    if legend != None:
+        plt.legend(legend)
+
 car = rpi_movement()
 car.init()
 mb = mb_telemetry()
@@ -112,11 +142,14 @@ toCalibrate = False
 attempts = 5
 if toCalibrate:
   write_calibration_file(car, auto = False, attempts = attempts)
-  print(mb.magx_offset, mb.magx_scale, mb.magy_offset, mb.magy_scale)
+  
 
-mb.read_mag_calibration_file()    
+mb.read_mag_calibration_file()
+print("Magnetometer caibration:")    
+print(mb.magx_offset, mb.magx_scale, mb.magy_offset, mb.magy_scale)
 
-label = "time gyroz magX magY yaw_rm yaw_rg yaw_cf yaw_kf"
+label = "time gyroz magX magY yaw_mag yaw_gyro yaw_cf yaw_kf"
+print(label)
 f = create_file(name = 'filters', label = label)
 
 dt = time()
@@ -127,30 +160,37 @@ sdata = ''
 
 mb.time = t
 telemetry = mb.telemetry()
-magx, magy, yaw_rm = yaw_from_mags(telemetry)
-kf = kalman_filter_init(telemetry, yaw = yaw_rm, gyro = telemetry[5])
+kf = kalman_filter_init(mb, yaw = yaw_from_mags(mb), gyro = mb.gyroz)
 #print(kf)
 
 obstacle_threshold = 15
 voltage_threshold = 6.7
 uv_counter = 0
+gyro_std, yaw_std = 0.04659871242856395,2.4556563053489393
+
+ts, yaws_mag, yaws_gyro, complems, kalmans = [], [], [], [], []
+
 while(1):
     try:
         dt = time() - dt
         mb.time += dt
-        telemetry = mb.telemetry()
         dt = time()
-        t, gyro, yaw_rg = yaw_from_gyro_euler(gyros, telemetry)
-        magx, magy, yaw_rm = yaw_from_mags(telemetry)
-        yaw_cf = complementary_filter(yaw_rm, yaw_rg, alpha = 0.75)
         
-        kf.z = np.array([yaw_rm, telemetry[5]])
-        kf.predict()
-        kf.update(kf.z)
-        yaw_kf = round(kf.x[0], 3)
+        mb.telemetry()
+
+
+        yaw_gyro, gyros = yaw_from_gyro_euler(gyros, mb)       
+        yaw_mag, yaw_kf = kalman_filter_get_prediction(kf, mb, gyro_std=gyro_std, yaw_std=yaw_std)
+        yaw_cf = complementary_filter(yaw_mag, yaw_gyro, alpha = 0.3)
         
-        sdata = "{} {} {} {} {} {} {} {}".format(t, gyro, magx, magy, yaw_rm, yaw_rg, yaw_cf, yaw_kf) 
-        
+        ts.append(round(mb.time, 3))
+        yaws_mag.append(yaw_mag)
+        yaws_gyro.append(mb.gyroz)
+        complems.append(yaw_cf)
+        kalmans.append(yaw_kf)
+
+        sdata = "{:.3f} {} {} {} {} {} {} {}".format(mb.time, mb.gyroz, mb.magx, mb.magy, yaw_mag, yaw_gyro, yaw_cf, yaw_kf) 
+#        print(sdata)
         try:
             if(mb.dist1 < obstacle_threshold and mb.dist2 < obstacle_threshold):
                 rul = car.turn_center()
@@ -197,4 +237,7 @@ while(1):
         car.stop()
         car.turn_center()
         f.close()
+        legend = ['yaw from mag', 'yaw from gyro', 'complementary', 'kalman']
+        plot_data_n_labels(ts, [yaws_mag, yaws_gyro, complems, kalmans], title = "Yaw", xlabel = 'Time, s',
+                           ylabel = 'Yaw, degs', legend = legend)
         break
