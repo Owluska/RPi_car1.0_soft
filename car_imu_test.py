@@ -32,30 +32,46 @@ def yaw_from_mags(telemetry):
     yaw = round(math.atan2(-magy, magx) * R2D, 3)
     return magx, magy, yaw
 
-def yaw_from_gyro_rk4(gyros, telemetry):
+#def yaw_from_gyro_rk4(gyros, telemetry):
+#    dt = telemetry[0]
+#    gyros.append(telemetry[5])
+#    g_4, g_3, g_2, g_1 = 0,0,0,0
+#    length = len(gyros)
+#    if length == 0:
+#        return 0
+#    elif length == 1:
+#        g_1 = gyros[-1]
+#    elif length == 2:
+#        g_1 = gyros[-1]
+#        g_2 = gyros[-2]
+#    elif length == 3:
+#        g_1 = gyros[-1]
+#        g_2 = gyros[-2]
+#        g_3 = gyros[-3]
+#    else:
+#        g_1 = gyros[-1]
+#        g_2 = gyros[-2]
+#        g_3 = gyros[-3]
+#        g_4 = gyros[-4]
+#    yaw = g_2*dt + 1/6*(g_1 + 2*g_2 + 2*g_3 + g_4)
+#    yaw = yaw % (-180)
+#    return dt, g_1, round(yaw, 3)
+    
+
+def yaw_from_gyro_euler(gyros, telemetry):
     dt = telemetry[0]
     gyros.append(telemetry[5])
-    g_4, g_3, g_2, g_1 = 0,0,0,0
     length = len(gyros)
     if length == 0:
         return 0
     elif length == 1:
-        g_1 = gyros[-1]
-    elif length == 2:
-        g_1 = gyros[-1]
-        g_2 = gyros[-2]
-    elif length == 3:
-        g_1 = gyros[-1]
-        g_2 = gyros[-2]
-        g_3 = gyros[-3]
+        yaw = gyros[0] * dt
     else:
-        g_1 = gyros[-1]
-        g_2 = gyros[-2]
-        g_3 = gyros[-3]
-        g_4 = gyros[-4]
-    yaw = g_2*dt + 1/6*(g_1 + 2*g_2 + 2*g_3 + g_4)
-    yaw = yaw % (-180)
-    return dt, g_1, round(yaw, 3)
+        yaw = gyros[-2] + gyros[-1]*dt
+
+    if abs(yaw) > 180:
+        yaw = 180 + yaw % (-360)
+    return dt, gyros[-1], round(yaw, 3)
 
 
 def complementary_filter(data1, data2, alpha = 1):
@@ -96,11 +112,11 @@ toCalibrate = False
 attempts = 5
 if toCalibrate:
   write_calibration_file(car, auto = False, attempts = attempts)
-  mb.read_calibration_file()
   print(mb.magx_offset, mb.magx_scale, mb.magy_offset, mb.magy_scale)
-    
 
-label = "time,s Volts,V  gyroz magX magY yaw_rm yaw_rg yaw_cf yaw_kf"
+mb.read_mag_calibration_file()    
+
+label = "time gyroz magX magY yaw_rm yaw_rg yaw_cf yaw_kf"
 f = create_file(name = 'filters', label = label)
 
 dt = time()
@@ -124,7 +140,7 @@ while(1):
         mb.time += dt
         telemetry = mb.telemetry()
         dt = time()
-        t, gyro, yaw_rg = yaw_from_gyro_rk4(gyros, telemetry)
+        t, gyro, yaw_rg = yaw_from_gyro_euler(gyros, telemetry)
         magx, magy, yaw_rm = yaw_from_mags(telemetry)
         yaw_cf = complementary_filter(yaw_rm, yaw_rg, alpha = 0.75)
         
