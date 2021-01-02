@@ -95,7 +95,7 @@ def kalman_filter_init(board, yaw = 0, gyro = 0):
     tracker.R = np.array([[yaw_std,          0],
                           [        0, gyro_std]])
     
-    Q = Q_discrete_white_noise(dim=2, dt = dt, var = 0.01)
+    Q = Q_discrete_white_noise(dim=2, dt = dt, var = 0.001)
 #    Q = np.array([[Q[0][0], Q[0][1]],
 #                  [Q[1][0], Q[1][1]]])
     tracker.Q = Q
@@ -128,6 +128,7 @@ def plot_data_n_labels(x, ys, title = '', xlabel = '',
     plt.title(title)
     plt.xlabel(xlabel)
     plt.ylabel(ylabel)
+    plt.grid()
     
     if legend != None:
         plt.legend(legend)
@@ -138,7 +139,7 @@ mb = mb_telemetry()
 mb.init_all()
 
 
-toCalibrate = False
+toCalibrate = False 
 attempts = 5
 if toCalibrate:
   write_calibration_file(car, auto = False, attempts = attempts)
@@ -146,7 +147,7 @@ if toCalibrate:
 
 mb.read_mag_calibration_file()
 print("Magnetometer caibration:")    
-print(mb.magx_offset, mb.magx_scale, mb.magy_offset, mb.magy_scale)
+print(mb.magx_offset, mb.magx_scale, mb.magy_offset, mb.magy_scale, mb.magz_offset, mb.magz_scale)
 
 label = "time gyroz magX magY yaw_mag yaw_gyro yaw_cf yaw_kf"
 print(label)
@@ -166,6 +167,7 @@ kf = kalman_filter_init(mb, yaw = yaw_from_mags(mb), gyro = mb.gyroz)
 obstacle_threshold = 15
 voltage_threshold = 6.7
 uv_counter = 0
+
 gyro_std, yaw_std = 0.04659871242856395,2.4556563053489393
 
 ts, yaws_mag, yaws_gyro, complems, kalmans = [], [], [], [], []
@@ -176,8 +178,23 @@ while(1):
         mb.time += dt
         dt = time()
         
+        
+        yaws, gyros, magxs, magys = [], [], [], []
+#        for i in range(3):
+#            mb.telemetry()
+#            gyros.append(mb.gyroz)
+#            magxs.append(mb.magx)
+#            magys.append(mb.magy)
+#            yaws.append(yaw_from_mags(mb))
+#       
+#        gyro_std = np.array(gyros).std()
+#        yaw_std = np.array(yaws).std()
+#        
+#        print(yaw_std, gyro_std)
+#        mb.magx = np.median(magxs)
+#        mb.magy = np.median(magys)
+        
         mb.telemetry()
-
 
         yaw_gyro, gyros = yaw_from_gyro_euler(gyros, mb)       
         yaw_mag, yaw_kf = kalman_filter_get_prediction(kf, mb, gyro_std=gyro_std, yaw_std=yaw_std)
@@ -190,7 +207,7 @@ while(1):
         kalmans.append(yaw_kf)
 
         sdata = "{:.3f} {} {} {} {} {} {} {}".format(mb.time, mb.gyroz, mb.magx, mb.magy, yaw_mag, yaw_gyro, yaw_cf, yaw_kf) 
-#        print(sdata)
+#        print(mb.dist1, mb.dist2)
         try:
             if(mb.dist1 < obstacle_threshold and mb.dist2 < obstacle_threshold):
                 rul = car.turn_center()
@@ -220,6 +237,7 @@ while(1):
                     break
         
             if(mb.dist1 >= obstacle_threshold and mb.dist2 >= obstacle_threshold and mb.motors_voltage >= voltage_threshold):
+#            else:
                 motors = car.move_forward()
                 rul = car.turn_right()
                 uv_counter = 0
@@ -237,7 +255,11 @@ while(1):
         car.stop()
         car.turn_center()
         f.close()
-        legend = ['yaw from mag', 'yaw from gyro', 'complementary', 'kalman']
-        plot_data_n_labels(ts, [yaws_mag, yaws_gyro, complems, kalmans], title = "Yaw", xlabel = 'Time, s',
-                           ylabel = 'Yaw, degs', legend = legend)
+#        mb.stop()
+        try:
+            legend = ['yaw from mag', 'yaw from gyro', 'complementary', 'kalman']
+            plot_data_n_labels(ts, [yaws_mag, yaws_gyro, complems, kalmans], title = "Yaw", xlabel = 'Time, s',
+                               ylabel = 'Yaw, degs', legend = legend)
+        except Exception:
+            pass
         break

@@ -103,7 +103,7 @@ def mag_calibrate(car, auto = False):
     scale_z = avg_delta / avg_delta_z
     
 #    result = "{:6.3f} {:6.3f} {:6.3f} {:6.3f} {:6.3f} {:6.3f}".format(offset_x, offset_y, offset_z, scale_x, scale_y, scale_z)
-    result = "{:7.3f} {:7.3f} {:7.3f} {:7.3f}".format(offset_x, scale_x, offset_y, scale_y)
+    result = "{:7.3f} {:7.3f} {:7.3f} {:7.3f} {:7.3f} {:7.3f}".format(offset_x, scale_x, offset_y, scale_y, offset_z, scale_z)
     print(result)
     
     return offset_x, offset_y, offset_z, scale_x, scale_y, scale_z
@@ -120,7 +120,7 @@ def write_calibration_file(car, auto = False, attempts = 1, path = '/home/pi/Des
     name = 'mag'
     mf = create_file(name = name,  path = path)
     data = []
-    offset_x, scale_x, offset_y, scale_y = 0,0,0,0
+    offset_x, scale_x, offset_y, scale_y, offset_z, scale_z = 0,0,0,0,0,0
     for i in range(attempts):
 #        
 #        offset_x += offset_x
@@ -135,13 +135,20 @@ def write_calibration_file(car, auto = False, attempts = 1, path = '/home/pi/Des
         scale_x += d[3]
         offset_y += d[1]
         scale_y += d[4]
+        offset_z += d[2]
+        scale_z += d[5]
         
     offset_x /= attempts
     scale_x /= attempts
     offset_y /= attempts
     scale_y /= attempts
+    offset_z /= attempts
+    scale_z /= attempts
+    label = "x_offset x_scale y_offset y_scale z_offset z_scale\n"
+    mf.write(label)    
     
-    s = "x_offset: {:7.3f},x_scale: {:7.3f},y_offset: {:7.3f},y_scale: {:7.3f}".format(offset_x, scale_x, offset_y, scale_y)
+    s = "{:.3f} {:.3f} {:.3f} {:.3f} {:.3f} {:.3f}\n".format(offset_x,
+                   scale_x, offset_y, scale_y, offset_z, scale_z)
     mf.write(s)
     mf.close()
     
