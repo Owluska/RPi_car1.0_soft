@@ -43,12 +43,12 @@ class mb_telemetry():
         self.gyroz = None
         self.magx = None
         self.magy = None
-        self.magx_offset = -4.969
-        self.magx_scale = 1.466
-        self.magy_offset = 24.116
-        self.magy_scale = 0.874
-        self.magz_offset = 24.710
-        self.magz_scale = 0.853
+        self.magx_offset = 0
+        self.magx_scale = 1
+        self.magy_offset = 0
+        self.magy_scale = 1
+        self.magz_offset = 0
+        self.magz_scale = 1
         
         self.time = 0
         
@@ -180,17 +180,17 @@ class mb_telemetry():
         self.dist1 = self.get_distance(1) 
         
         self.get_data_ina219()
-        sleep(0.02)
+        sleep(0.020)
         
         self.get_mpu9250_acc()
-        sleep(0.01)
+        sleep(0.010)
         
+        self.dist2 = self.get_distance(2)       
         self.get_mpu9250_gyro()
-        sleep(0.01)
-        
-        self.dist2 = self.get_distance(2)      
+        sleep(0.010)
+   
         self.get_mpu9250_mag()
-        sleep(0.04)
+        sleep(0.010)
         
 
         
