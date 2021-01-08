@@ -16,6 +16,7 @@ import numpy as np
 from filterpy.common import Q_discrete_white_noise
 from filterpy.kalman import KalmanFilter
 import matplotlib.pyplot as plt
+from scipy import integrate
 
 def create_file(name = 'test', path = '/home/pi/Desktop/RPi_car1.0_soft/output/', label = ''):
     now = datetime.now()
@@ -27,25 +28,37 @@ def create_file(name = 'test', path = '/home/pi/Desktop/RPi_car1.0_soft/output/'
     return f
 
 def yaw_from_mags(board):
-    magx = board.magy
-    magy = board.magz
-
-    yaw = math.atan2(magx, -magy) * 180/math.pi
+    magx = board.magx
+    magy = board.magy
+    magz = board.magz
+    norm = math.sqrt(magz**2 + magy**2 + magx**2)
+    magy /= norm
+    magx /= norm
+    yaw = math.atan2(magx, magy) * 180/math.pi
     yaw = round(yaw, 3)
     return yaw
 
  
 
-def yaw_from_gyro_euler(previous_yaw, board, h = 0.05):
+def yaw_from_gyro_euler(previous_yaw, board):
     dt = board.time  
 
-    yaw = previous_yaw  + h * board.gyroz*dt
-    yaw += h
+    yaw = previous_yaw + board.gyroz*dt
 
     if abs(yaw) > 180:
         yaw = -180 + yaw % (360)
     yaw = round(yaw,3)
     return yaw
+
+def yaw_from_gyros(gyros, times, init):
+
+    yaw = integrate.cumtrapz(gyros, times, initial = init)[-1]
+
+    if abs(yaw) > 180:
+        yaw = -180 + yaw % (360)
+    yaw = round(yaw,3)
+    return yaw
+
 
 
 def kalman_filter_init(board, yaw = 0, gyro = 0):
@@ -99,6 +112,7 @@ def plot_data_n_labels(x, ys, title = '', xlabel = '',
     if legend != None:
         plt.legend(legend)
 
+
 car = rpi_movement()
 car.init()
 mb = mb_telemetry()
@@ -106,7 +120,7 @@ mb.init_all()
 
 
 toCalibrate = False 
-attempts = 2
+attempts = 3
 if toCalibrate:
   write_calibration_file(car, auto = False, attempts = attempts)
   
@@ -171,7 +185,8 @@ while(1):
         magys.append(mb.magy)
         magzs.append(mb.magz)
 
-        yaw_gyro = yaw_from_gyro_euler(yaw_gyro, mb)       
+#        yaw_gyro = yaw_from_gyro_euler(yaw_gyro, mb)
+        yaw_gyro = yaw_from_gyros(gyros, ts, gyros[0])
         yaw_mag, yaw_kf = kalman_filter_get_prediction(kf, mb, gyro_std=gyro_std, yaw_std=yaw_std)
 
         

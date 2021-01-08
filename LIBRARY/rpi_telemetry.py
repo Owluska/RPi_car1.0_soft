@@ -183,14 +183,14 @@ class mb_telemetry():
         sleep(0.020)
         
         self.get_mpu9250_acc()
-        sleep(0.010)
+        sleep(0.020)
         
         self.dist2 = self.get_distance(2)       
         self.get_mpu9250_gyro()
         sleep(0.010)
    
         self.get_mpu9250_mag()
-        sleep(0.010)
+        sleep(0.020)
         
 
         
