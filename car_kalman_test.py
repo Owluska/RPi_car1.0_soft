@@ -27,19 +27,43 @@ def create_file(name = 'test', path = '/home/pi/Desktop/RPi_car1.0_soft/output/'
     f.write('\n')
     return f
 
-def yaw_from_mags(board):
+def yaw_from_mags(board, norm = True):
     magx = board.magx
     magy = board.magy
     magz = board.magz
-    norm = math.sqrt(magz**2 + magy**2 + magx**2)
-    magy /= norm
-    magx /= norm
-    yaw = math.atan2(magx, magy) * 180/math.pi
+    
+    if norm:
+        n = math.sqrt(magz**2 + magy**2 + magx**2)
+        magy /= n
+        magx /= n
+    
+    yaw = math.atan(-magy/magx) * 180/math.pi
     yaw = round(yaw, 3)
     return yaw
 
- 
+def yaw_from_mags_tilt_compensate(board, norm = True):
+    ax = board.accx
+    ay = board.accy
+    az = board.accz
+    
+    roll = math.atan(ay/az)
+    pitch = math.atan(-ax/math.sqrt(ay**2 + az**2))
+    
+    magx = board.magx
+    magy = board.magy
+    magz = board.magz
+    
+    if norm:
+        n = math.sqrt(magx**magx + magy**magy + magz**magz)
+        magx /= n
+        magy /= n
+        magz /= n
+    
+    Mx = magx*math.cos(pitch) + magz*math.sin(pitch)
+    My = magx*math.sin(roll)*math.sin(pitch) + magy*math.cos(roll) - magz*math.sin(roll)*math.cos(pitch)
 
+    yaw = math.atan(My/Mx)
+    return round(yaw, 3)                    
 def yaw_from_gyro_euler(previous_yaw, board):
     dt = board.time  
 
