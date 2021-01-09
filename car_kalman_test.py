@@ -54,7 +54,7 @@ def yaw_from_mags_tilt_compensate(board, norm = True):
     magz = board.magz
     
     if norm:
-        n = math.sqrt(magx**magx + magy**magy + magz**magz)
+        n = math.sqrt(magx**2 + magy**2 + magz**2)
         magx /= n
         magy /= n
         magz /= n
@@ -85,7 +85,7 @@ def yaw_from_gyros(gyros, times, init):
 
 
 
-def kalman_filter_init(board, yaw = 0, gyro = 0):
+def kalman_filter_init(board, yaw = 0, gyro = 0, z0_std = 2.4556563053489393, z1_std = 0.04659871242856395):
     tracker = KalmanFilter(dim_x=2, dim_z=2)
     dt = board.time
     tracker.F = np.array([[1, dt],
@@ -93,10 +93,9 @@ def kalman_filter_init(board, yaw = 0, gyro = 0):
     tracker.H = np.array([[1, 0],
                           [0, 1]])
     
-    gyro_std = 0.04659871242856395
-    yaw_std = 2.4556563053489393
-    tracker.R = np.array([[yaw_std,          0],
-                          [        0, gyro_std]])
+
+    tracker.R = np.array([[z0_std,          0],
+                          [        0, z1_std]])
     
     Q = Q_discrete_white_noise(dim=2, dt = dt, var = 0.01)
 #    Q = np.array([[Q[0][0], Q[0][1]],
@@ -115,6 +114,7 @@ def kalman_filter_get_prediction(tracker, board, gyro_std, yaw_std):
                       [        0, gyro_std]])
     
     kf.z = np.array([yaw_from_mags(board), board.gyroz])
+#    kf.z = np.array([yaw_from_mags_tilt_compensate(board), board.gyroz])
     
     kf.predict()
     kf.update(kf.z)
@@ -166,15 +166,25 @@ sdata = ''
 
 mb.time = t
 telemetry = mb.telemetry()
-kf = kalman_filter_init(mb, yaw = yaw_from_mags(mb), gyro = mb.gyroz)
-yaw_gyro = yaw_from_gyro_euler(yaw_from_mags(mb), mb) 
+
+z0, z1 = [], []
+for i in range(10):
+    mb.telemetry()
+    z0.append(yaw_from_mags(mb))
+    z1.append(mb.gyroz)
+    
+
+yaw_std, gyro_std = np.array(z0).std(),np.array(z1).std()
+#print(yaw_std, gyro_std)
+kf = kalman_filter_init(mb, yaw = yaw_from_mags(mb), gyro = mb.gyroz, z0_std = yaw_std, z1_std = gyro_std)
+#yaw_gyro = yaw_from_gyro_euler(yaw_from_mags(mb), mb) 
 #print(kf)
 
 obstacle_threshold = 15
 voltage_threshold = 6.7
 uv_counter = 0
 
-gyro_std, yaw_std = 0.04659871242856395,2.4556563053489393
+
 
 
 ts, yaws_mag, yaws_gyro, kalmans = [], [], [], []

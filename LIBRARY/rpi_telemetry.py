@@ -10,8 +10,8 @@ import FaBo9Axis_MPU9250
 #!pip3 install pi-ina219
 from ina219 import INA219
 from time import time, sleep
-import threading
-from multiprocessing.pool import ThreadPool
+#import threading
+#from multiprocessing.pool import ThreadPool
 
 class mb_telemetry():
     def __init__(self):
@@ -183,15 +183,15 @@ class mb_telemetry():
         sleep(0.020)
         
         self.get_mpu9250_acc()
-        sleep(0.020)
-        
-        self.dist2 = self.get_distance(2)       
+#        sleep(0.010)
+
+        self.dist2 = self.get_distance(2)        
         self.get_mpu9250_gyro()
-        sleep(0.010)
-   
+#        sleep(0.010)
+        
         self.get_mpu9250_mag()
         sleep(0.020)
-        
+   
 
         
 
