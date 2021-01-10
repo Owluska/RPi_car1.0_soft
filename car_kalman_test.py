@@ -59,8 +59,8 @@ def yaw_from_mags_tilt_compensate(board, norm = True):
         magy /= n
         magz /= n
     
-    Mx = magx*math.cos(pitch) + magz*math.sin(pitch)
-    My = magx*math.sin(roll)*math.sin(pitch) + magy*math.cos(roll) - magz*math.sin(roll)*math.cos(pitch)
+    My = magx*math.cos(roll) + magz*math.sin(roll)
+    Mx = magx*math.cos(pitch)  + magy*math.sin(roll)*math.sin(pitch) - magz*math.sin(pitch)*math.cos(roll)
 
     yaw = math.atan(My/Mx)
     return round(yaw, 3)                    

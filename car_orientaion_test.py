@@ -28,8 +28,21 @@ def yaw_from_mags(mx, my, mz, norm = True):
     
     if norm:
         mx, my, mz = normalize_3axis(mx, my, mz)
-
-    yaw = math.atan2(my,mx) * 180/math.pi
+    
+    # if mx < 0:
+    #     yaw = 180 - math.atan(my/mx) * 180/math.pi
+    # elif mx > 0 and my < 0:
+    #     yaw = - math.atan(my/mx) * 180/math.pi
+    # elif mx > 0 and my > 0:
+    #     yaw = 360 - math.atan(my/mx) * 180/math.pi
+    # elif mx == 0 and my < 0:
+    #     yaw = 90
+    # elif mx == 0 and my > 0:
+    #     yaw = 270
+    # else:
+    #     yaw = 0
+    yaw = math.atan2(my, mx) * 180/math.pi
+    
     yaw = round(yaw, 3)
     return yaw
 
@@ -38,7 +51,7 @@ def roll_from_acc(board):
     ay = board.accy
     az = board.accz - 1
     
-    roll = math.atan(-ay/az)
+    roll = math.atan2(-ay, az)
 #    print("roll:", roll)
     return roll
 
@@ -47,7 +60,7 @@ def pitch_from_acc(board):
     ay = board.accy
     az = board.accz - 1
     
-    pitch = math.atan(-ax/math.sqrt(ay**2 + az**2))
+    pitch = math.atan2(-ax, math.sqrt(ay**2 + az**2))
 #    print("pitch:", pitch)
     return pitch
     
@@ -60,13 +73,13 @@ def yaw_from_mags_tilt_compensate(board, norm = True):
     my = board.magy
     mz = board.magz
     
-    if norm:
-        mx, my, mz = normalize_3axis(mx, my, mz)
+    # if norm:
+    #     mx, my, mz = normalize_3axis(mx, my, mz)
     
-    Mx = mx*math.cos(pitch) + mz*math.sin(pitch)
-    My = mx*math.sin(roll)*math.sin(pitch) + my*math.cos(roll) - mz*math.sin(roll)*math.cos(pitch)
+    My = mx*math.cos(roll) + mz*math.sin(roll)
+    Mx = mx*math.cos(pitch)  + my*math.sin(roll)*math.sin(pitch) - mz*math.sin(pitch)*math.cos(roll)
  
-    yaw = yaw_from_mags(Mx, My, mz, norm = False)
+    yaw = yaw_from_mags(Mx, My, mz, norm = norm)
     return yaw
                     
 def yaw_from_gyro_euler(previous_yaw, board):

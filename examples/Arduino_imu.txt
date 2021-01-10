@@ -1,0 +1,762 @@
+PROFESSIONAL
+EDUCATION
+STORE
+Search on Arduino.cc
+SIGN IN
+HARDWARE
+SOFTWARE
+DOCUMENTATION
+COMMUNITY
+BLOG
+ABOUT
+Arduino Forum> Forum 2005-2010 (read only)> General> Exhibition> Selfmade Tilt compensated Compass Pitch, Roll, Yaw
+PRINTGo DownPages: [1] 2 
+Topic: Selfmade Tilt compensated Compass Pitch, Roll, Yaw (Read 36092 times)Previous Topic - Next Topic
+ArthurSpooner
+Guest
+
+Selfmade Tilt compensated Compass Pitch, Roll, Yaw
+Feb 27, 2010, 07:23 pm Last Edit: Feb 28, 2010, 12:28 am by ArthurSpooner Reason: 1
+This was designed for the use as a Head Tracker. But I assume that there are many other useful things out there for a tilt compensated compass ? or Pitch, Roll, or Yaw tracking.
+
+By the way. Std. deviation for Pitch and Roll is about 1 degree.
+Yaw: I haven't checked yet. But a Pitch or Roll of 60 degrees gets compensated fairly good.
+I assume an accuracy of 2 degrees. But I have to check.
+
+The biggest problem is I believe the inaccuracy of the many sin, cos . etc.
+Maybe somebody has an idea?!
+
+For this project you need a 3 DOF Accelerometer and a 3 DOF magnetic Sensor
+
+Arne
+
+Code  by Arne
+Code is somewhat documented?
+
+Code: [Select]
+
+//code by Arne
+//the acclerometer it set up the way that the z acceleration looks
+//to the sky, and x y is flat --> like most cartesian coordinate systems
+//I use an A7270 as an Accelerometer -> they are on a breakout board for approx $20 USD
+//and a HMC5843 as a triple axis magnetic Sensor $50 USD
+//feel free to comment on the code -> improvement is always appreciated
+//you can ask questions in English or German
+
+//required for calculations
+#include <math.h>
+//required for HMC5843 communication
+#include <HMC.h>
+
+
+
+//accelerometer connecteded to pins 0 through 2
+#define xAxis 0
+#define yAxis 1
+#define zAxis 2
+
+
+
+//by increasing alphaAccel the response will become faster
+//but the noise will increae [alpha must be between 0 and 1]
+//values for digital lowpass
+float alphaAccel = 0.4;
+float alphaMagnet = 0.4;
+
+unsigned int xOffset=0;
+unsigned int yOffset=0;
+unsigned int zOffset=0;
+
+float Pitch=0;
+float Roll=0;
+float Yaw=0;
+
+int xRaw=0;
+int yRaw=0;
+int zRaw=0;
+
+float xFiltered=0;
+float yFiltered=0;
+float zFiltered=0;
+
+float xFilteredOld=0;
+float yFilteredOld=0;
+float zFilteredOld=0;
+
+float xAccel=0;
+float yAccel=0;
+float zAccel=0;
+
+int xMagnetRaw=0;
+int yMagnetRaw=0;
+int zMagnetRaw=0;
+
+float xMagnetFiltered=0;
+float yMagnetFiltered=0;
+float zMagnetFiltered=0;
+
+float xMagnetFilteredOld=0;
+float yMagnetFilteredOld=0;
+float zMagnetFilteredOld=0;
+
+int xMagnetMax=0;
+int yMagnetMax=0;
+int zMagnetMax=0;
+
+int xMagnetMin=10000;
+int yMagnetMin=10000;
+int zMagnetMin=10000;
+
+float xMagnetMap=0;
+float yMagnetMap=0;
+float zMagnetMap=0;
+
+float YawU;
+
+//initialize µController
+void setup()
+{
+ Serial.begin(115200);       //initialize serial port
+ analogReference(EXTERNAL);  //use external reference voltage (3,3V)
+ delay(2000);  //calibrate sensor after a short delay
+ HMC.init();
+ getAccelOffset();           //keep it flat and non moving on the table
+
+ //there are other ways to calibrate the offset, each has some advantes
+ //and disadvantes..
+ //compare application note AN3447
+ //http://www.freescale.com/files/sensors/doc/app_note/AN3447.pdf
+}
+
+
+void FilterAD()
+{
+ // read from AD and subtract the offset
+ xRaw=analogRead(xAxis)-xOffset;
+ yRaw=analogRead(yAxis)-yOffset;
+ zRaw=analogRead(zAxis)-zOffset;
+ 
+ //Digital Low Pass - compare: (for accelerometer)
+ //http://en.wikipedia.org/wiki/Low-pass_filter
+ xFiltered= xFilteredOld + alphaAccel * (xRaw - xFilteredOld);
+ yFiltered= yFilteredOld + alphaAccel * (yRaw - yFilteredOld);
+ zFiltered= zFilteredOld + alphaAccel * (zRaw - zFilteredOld);
+ 
+ xFilteredOld = xFiltered;
+ yFilteredOld = yFiltered;
+ zFilteredOld = zFiltered;
+ 
+ 
+ 
+ //read from Compass
+ //Digital Low Pass for Noise Reduction for Magnetic Sensor
+ HMC.getValues(&xMagnetRaw,&yMagnetRaw,&zMagnetRaw);
+ 
+ xMagnetFiltered= xMagnetFilteredOld + alphaMagnet * (xMagnetRaw - xMagnetFilteredOld);
+ yMagnetFiltered= yMagnetFilteredOld + alphaMagnet * (yMagnetRaw - yMagnetFilteredOld);
+ zMagnetFiltered= zMagnetFilteredOld + alphaMagnet * (zMagnetRaw - zMagnetFilteredOld);
+ 
+ xMagnetFilteredOld = xMagnetFiltered;
+ yMagnetFilteredOld = yMagnetFiltered;
+ zMagnetFilteredOld = zMagnetFiltered;
+   
+}
+ 
+
+void AD2Degree()
+{
+ // 3.3 = Vref; 1023 = 10Bit AD; 0.8 = Sensivity Accelerometer
+ // (compare datasheet of your accelerometer)
+ // the *Accel must be between -1 and 1; you may have to
+ // to add/subtract +1 depending on the orientation of the accelerometer
+ // (like me on the zAccel)
+ // they are not necessary, but are useful for debugging
+ xAccel=xFiltered *3.3 / (1023.0*0.8);      
+ yAccel=yFiltered *3.3 / (1023.0*0.8);      
+ zAccel=zFiltered *3.3 / (1023.0*0.8)+1.0;
+ 
+ // Calculate Pitch and Roll (compare Application Note AN3461 from Freescale
+ // http://www.freescale.com/files/sensors/doc/app_note/AN3461.pdf
+ // Microsoft Excel switches the values for atan2
+ // -> this info can make your life easier :-D
+ //angled are radian, for degree (* 180/3.14159)
+ Roll   = atan2(  yAccel ,  sqrt(sq(xAccel)+sq(zAccel)));  
+ Pitch  = atan2(  xAccel ,   sqrt(sq(yAccel)+sq(zAccel)));
+ 
+}
+
+void getAzimuth()
+{
+ //this part is required to normalize the magnetic vector
+ if (xMagnetFiltered>xMagnetMax) {xMagnetMax = xMagnetFiltered;}
+ if (yMagnetFiltered>yMagnetMax) {yMagnetMax = yMagnetFiltered;}
+ if (zMagnetFiltered>zMagnetMax) {zMagnetMax = zMagnetFiltered;}
+ 
+ if (xMagnetFiltered<xMagnetMin) {xMagnetMin = xMagnetFiltered;}
+ if (yMagnetFiltered<yMagnetMin) {yMagnetMin = yMagnetFiltered;}
+ if (zMagnetFiltered<zMagnetMin) {zMagnetMin = zMagnetFiltered;}
+ 
+ float norm;
+ 
+ xMagnetMap = float(map(xMagnetFiltered, xMagnetMin, xMagnetMax, -10000, 10000))/10000.0;
+ yMagnetMap = float(map(yMagnetFiltered, yMagnetMin, yMagnetMax, -10000, 10000))/10000.0;
+ zMagnetMap = float(map(zMagnetFiltered, zMagnetMin, zMagnetMax, -10000, 10000))/10000.0;
+ 
+
+//normalize the magnetic vector
+norm= sqrt( sq(xMagnetMap) + sq(yMagnetMap) + sq(zMagnetMap));
+xMagnetMap /=norm;
+yMagnetMap /=norm;
+zMagnetMap /=norm;
+ 
+//compare Applications of Magnetic Sensors for Low Cost Compass Systems by Michael J. Caruso
+//for the compensated Yaw equations...
+//http://www.ssec.honeywell.com/magnetic/datasheets/lowcost.pdf
+Yaw=atan2( (-yMagnetMap*cos(Roll) + zMagnetMap*sin(Roll) ) , xMagnetMap*cos(Pitch) + zMagnetMap*sin(Pitch)*sin(Roll)+ zMagnetMap*sin(Pitch)*cos(Roll)) *180/PI;
+YawU=atan2(-yMagnetMap, xMagnetMap) *180/PI;
+}
+
+
+void loop()
+{
+ FilterAD();
+ AD2Degree();
+ getAzimuth();
+ Send2Com();
+}
+
+void Send2Com()
+{
+ Serial.print("Pitch: ");
+ Serial.print(int(Pitch*180/PI));
+ Serial.print(" Roll: ");
+ Serial.print(int(Roll*180/PI));
+
+ Serial.print(" Yaw: ");
+ Serial.print(int(Yaw));
+
+ Serial.print(" YawU: ");
+ Serial.println(int(YawU));
+ delay(50);
+}
+ 
+
+
+
+void getAccelOffset()
+{ //you can make approx 60 iterations because we use an unsigned int
+ //otherwise you get an overflow. But 60 iterations should be fine
+  for (int i=1; i <= 60; i++){        
+    xOffset += analogRead(xAxis);    
+    yOffset += analogRead(yAxis);
+    zOffset += analogRead(zAxis);
+    }
+  xOffset /=60;  
+  yOffset /=60;
+  zOffset /=60;
+
+  Serial.print("xOffset: ");
+  Serial.print(xOffset);
+  Serial.print("   yOffset: ");
+  Serial.print(yOffset);
+  Serial.print("   zOffset: ");
+  Serial.println(zOffset);
+}
+
+
+zitron
+Guest
+
+Re: Selfmade Tilt compensated Compass Pitch, Roll, Yaw
+#1
+Feb 27, 2010, 11:49 pm
+Cool, how much was the magnetometer sensor and where did you get it?
+ArthurSpooner
+Guest
+
+Re: Selfmade Tilt compensated Compass Pitch, Roll, Yaw
+#2
+Feb 28, 2010, 12:19 am
+about 50 USD from sparkfun,
+
+there might be the possibility to just use a 2 DOF magnetic sensor. Since the normalized vector of a magnetic field should equal one.
+
+then one could reduce the cost of the tracker a lot.
+but I have not figured out yet how to do it :D.
+rcpilotp51
+avatar_rcpilotp51
+***
+Full Member
+Posts: 228
+Karma: 3  [add]
+Arduino rocks
+
+Re: Selfmade Tilt compensated Compass Pitch, Roll, Yaw
+#3
+Mar 05, 2010, 08:54 pm
+do you need a magnetometer to get the yaw value.
+
+I just got this:
+http://gadgetgangster.com/213
+
+is it possible to adapt your code to this?
+
+thanks
+asilloo
+avatar_mustafa_serkan
+*
+Newbie
+Posts: 12
+Karma: 0  [add]
+Arduino rocks
+
+Re: Selfmade Tilt compensated Compass Pitch, Roll, Yaw
+#4
+Mar 08, 2010, 03:41 pm Last Edit: Mar 08, 2010, 07:09 pm by mustafa_serkan Reason: 1
+Hej,
+
+It this the right web side for download HMC.h library
+http://eclecti.cc/files/2009/11/HMC.zip
+
+I just try to make this sensor work, this is the video, please look and tell me if it is working or not!!!
+
+http://www.youtube.com/watch?v=HUwPg-9cOPA
+
+Thanks,
+redfox74
+Guest
+
+Re: Selfmade Tilt compensated Compass Pitch, Roll, Yaw
+#5
+Mar 10, 2010, 11:08 pm
+Hello,
+I try to use the HMC Sensor with my sanguino.cc board.
+The library HMC.h work fine but the sensor don't reply to my request with correct value . What Kind of hardware are using ? Are you a complete schematics of connection ? Are you using single or dual power supply ?
+What is the normal range of value  , I recived data between -13 and + 14 for every axisys .. random ... What'is the problem ?
+Regards
+Roberto
+ArthurSpooner
+Guest
+
+Re: Selfmade Tilt compensated Compass Pitch, Roll, Yaw
+#6
+Mar 14, 2010, 11:16 pm
+Hi,
+
+i reworked the code a little bit. For example I do not filter the magnetic data anymore (that actually increased the noise instead of decreasing it..)
+
+furthermore I don't make use of the HMC library..
+
+Connections:
+the hmc is just connected to analog 4 & 5  + ground + 3.3 volt. thats it..
+
+Code: [Select]
+
+
+
+//code by Arne
+//the acclerometer it set up the way that the z acceleration looks
+//to the sky, and x y is flat --> like most cartesian coordinate systems
+//I use an A7270 as an Accelerometer -> they are on a breakout board for approx $20
+//and a HMC5843 as a triple axis magnetic Sensor for approx $50
+//feel free to comment on the code -> improvement is always appreciated
+//code to read from HMC5843 was influenced by the gus from sf9domahrs
+//you can ask questions in English or German
+
+//required for calculations
+#include <math.h>
+//required for HMC5843 communication
+#include <Wire.h>
+
+#include <Servo.h>
+
+//accelerometer connecteded to pins 0 through 2
+#define xAxis 0
+#define yAxis 1
+#define zAxis 2
+
+
+
+//by increasing alphaAccel the response will become faster
+//but the noise will increae [alpha must be between 0 and 1]
+//values for digital lowpass
+//(filtering the Mag. Data does not improve the Noise Level!!)
+float alphaAccel = 0.35;
+float alphaYaw = 0.35;
+
+unsigned int xOffset=0;
+unsigned int yOffset=0;
+unsigned int zOffset=0;
+
+float Pitch=0;
+float Roll=0;
+float Yaw=0;
+
+int xRaw=0;
+int yRaw=0;
+int zRaw=0;
+
+float xFiltered=0;
+float yFiltered=0;
+float zFiltered=0;
+
+float xFilteredOld=0;
+float yFilteredOld=0;
+float zFilteredOld=0;
+
+float xAccel=0;
+float yAccel=0;
+float zAccel=0;
+
+int xMagnet=0;
+int yMagnet=0;
+int zMagnet=0;
+
+float norm;
+
+float yawRaw=0;
+float yawFiltered=0;
+float yawFilteredOld=0;
+
+//X:-770 612 Y:-664 697 Z:-592 656
+//after measurements
+int xMagnetMax=612;
+int yMagnetMax=697;
+int zMagnetMax=656;
+
+int xMagnetMin=-770;
+int yMagnetMin=-664;
+int zMagnetMin=-592;
+
+float xMagnetMap=0;
+float yMagnetMap=0;
+float zMagnetMap=0;
+
+float YawU;
+
+Servo ServoPitch;
+ Servo ServoYaw;
+
+int CompassAddress = 0x1E;  //0x3C //0x3D;  //(0x42>>1);
+
+//initialize µController
+void setup()
+{
+ Serial.begin(115200);       //initialize serial port
+ analogReference(EXTERNAL);  //use external reference voltage (3,3V)
+ delay(2000);  //calibrate sensor after a short delay
+ HMC_Init();  //initializes Mag Compass
+ //delay(2000);
+ getAccelOffset();           //keep it flat and non moving on the table
+
+ //there are other ways to calibrate the offset, each has some advantes
+ //and disadvantes..
+ //compare application note AN3447
+ //http://www.freescale.com/files/sensors/doc/app_note/AN3447.pdf
+ 
+ 
+ ServoPitch.attach(9);
+ ServoYaw.attach(10);
+}
+
+
+
+
+
+void loop()
+{
+ getMagnet();
+ FilterAD();
+ AD2Degree();
+ getAzimuth();
+ 
+ 
+ ServoPitch.write(map(Pitch*180/PI,-90,90,0,180));
+ ServoYaw.write(map(Yaw,-180,180,0,180));
+ Send2Com();
+}
+
+
+void HMC_Init()
+{
+ Wire.begin();
+ Wire.beginTransmission(CompassAddress);
+ Wire.send(0x02);
+ Wire.send(0x00);         //Set to continous streaming mode
+ Wire.endTransmission();  
+ delay(5);                //HMC5843 needs some ms before communication
+}
+
+
+void FilterAD()
+{
+ // read from AD and subtract the offset
+ xRaw=analogRead(xAxis)-xOffset;
+ yRaw=analogRead(yAxis)-yOffset;
+ zRaw=analogRead(zAxis)-zOffset;
+ 
+ //Digital Low Pass - compare: (for accelerometer)
+ //http://en.wikipedia.org/wiki/Low-pass_filter
+ xFiltered= xFilteredOld + alphaAccel * (xRaw - xFilteredOld);
+ yFiltered= yFilteredOld + alphaAccel * (yRaw - yFilteredOld);
+ zFiltered= zFilteredOld + alphaAccel * (zRaw - zFilteredOld);
+ 
+ xFilteredOld = xFiltered;
+ yFilteredOld = yFiltered;
+ zFilteredOld = zFiltered;
+ 
+}
+ 
+
+void AD2Degree()
+{
+ // 3.3 = Vref; 1023 = 10Bit AD; 0.8 = Sensivity Accelerometer
+ // (compare datasheet of your accelerometer)
+ // the *Accel must be between -1 and 1; you may have to
+ // to add/subtract +1 depending on the orientation of the accelerometer
+ // (like me on the zAccel)
+ // they are not necessary, but are useful for debugging
+ xAccel=xFiltered *3.3 / (1023.0*0.8);      
+ yAccel=yFiltered *3.3 / (1023.0*0.8);      
+ zAccel=zFiltered *3.3 / (1023.0*0.8)+1.0;
+ 
+ // Calculate Pitch and Roll (compare Application Note AN3461 from Freescale
+ // http://www.freescale.com/files/sensors/doc/app_note/AN3461.pdf
+ // Microsoft Excel switches the values for atan2
+ // -> this info can make your life easier :-D
+ //angled are radian, for degree (* 180/3.14159)
+ Roll   = -atan2(  yAccel ,  sqrt(sq(xAccel)+sq(zAccel)));  
+ Pitch  = atan2(  xAccel ,  sqrt(sq(yAccel)+sq(zAccel)));
+}
+
+void getAzimuth()
+{
+ //this part is required to normalize the magnetic vector
+ //get Min and Max Reading for Magnetic Axis
+ if (xMagnet>xMagnetMax) {xMagnetMax = xMagnet;}
+ if (yMagnet>yMagnetMax) {yMagnetMax = yMagnet;}
+ if (zMagnet>zMagnetMax) {zMagnetMax = zMagnet;}
+ 
+ if (xMagnet<xMagnetMin) {xMagnetMin = xMagnet;}
+ if (yMagnet<yMagnetMin) {yMagnetMin = yMagnet;}
+ if (zMagnet<zMagnetMin) {zMagnetMin = zMagnet;}
+ 
+ //Map the incoming Data from -1 to 1
+ xMagnetMap = float(map(xMagnet, xMagnetMin, xMagnetMax, -30000, 30000))/30000.0;
+ yMagnetMap = float(map(yMagnet, yMagnetMin, yMagnetMax, -30000, 30000))/30000.0;
+ zMagnetMap = float(map(zMagnet, zMagnetMin, zMagnetMax, -30000, 30000))/30000.0;
+ 
+
+//normalize the magnetic vector
+norm= sqrt( sq(xMagnetMap) + sq(yMagnetMap) + sq(zMagnetMap));
+xMagnetMap /=norm;
+yMagnetMap /=norm;
+zMagnetMap /=norm;
+ 
+//compare "Applications of Magnetic Sensors for Low Cost Compass Systems" by Michael J. Caruso
+//for the compensated Yaw equations...
+//http://www.ssec.honeywell.com/magnetic/datasheets/lowcost.pdf
+yawRaw=atan2( (-yMagnetMap*cos(Roll) + zMagnetMap*sin(Roll) ) , (xMagnetMap*cos(Pitch) + yMagnetMap*sin(Pitch)*sin(Roll)+ zMagnetMap*sin(Pitch)*cos(Roll)) ) *180/PI;
+YawU=atan2(-yMagnetMap, xMagnetMap) *180/PI;
+
+
+//apply Low Pass to Yaw
+//Digital Low Pass - compare: (for accelerometer)
+ //http://en.wikipedia.org/wiki/Low-pass_filter
+ Yaw= yawFilteredOld + alphaYaw * (yawRaw - yawFilteredOld);
+ yawFilteredOld=Yaw;
+}
+
+
+
+void getMagnet()
+{
+ 
+ int i = 0;
+ byte buff[6];
+
+ Wire.beginTransmission(CompassAddress);
+ Wire.send(0x03);        //sends address to read from
+ Wire.endTransmission(); //end transmission
+ 
+ //Wire.beginTransmission(CompassAddress);
+ Wire.requestFrom(CompassAddress, 6);    // request 6 bytes from device
+ while(Wire.available())   // ((Wire.available())&&(i<6))
+ {
+   buff[i] = Wire.receive();  // receive one byte
+   i++;
+ }
+ Wire.endTransmission(); //end transmission
+ 
+ if (i==6)  // All bytes received?
+   {
+   // MSB byte first, then LSB, X,Y,Z
+   xMagnet = ((((int)buff[2]) << 8) | buff[3]);    // X axis (internal sensor y axis)
+   yMagnet = ((((int)buff[0]) << 8) | buff[1]);    // Y axis (internal sensor x axis)
+   zMagnet = ((((int)buff[4]) << 8) | buff[5]);    // Z axis
+  }
+   
+ else
+  Serial.println("!ERR: Mag data");
+
+}
+
+
+
+void Send2Com()
+{
+ Serial.print("Pitch: ");
+ Serial.print(int(Pitch*180/PI));
+ Serial.print(" Roll: ");
+ Serial.print(int(Roll*180/PI));
+
+ Serial.print(" Yaw: ");
+ Serial.print(int(Yaw));
+   
+ Serial.print(" YawU: ");
+ Serial.print(int(YawU));
+ 
+ Serial.print(" MagnetX: ");
+ Serial.print(xMagnet);
+ Serial.print(" MagnetY: ");
+ Serial.print(yMagnet);
+ Serial.print(" MagnetZ: ");
+ Serial.print(zMagnet);
+ 
+ Serial.print(" X:");
+ Serial.print(xMagnetMin);
+ Serial.print(" ");
+ Serial.print(xMagnetMax);
+ Serial.print(" Y:");
+ Serial.print(yMagnetMin);
+ Serial.print(" ");
+ Serial.print(yMagnetMax);
+ Serial.print(" Z:");
+ Serial.print(zMagnetMin);
+ Serial.print(" ");
+ Serial.println(zMagnetMax);
+     
+ delay(50);
+}
+ 
+
+
+
+void getAccelOffset()
+{ //you can make approx 60 iterations because we use an unsigned int
+ //otherwise you get an overflow. But 60 iterations should be fine
+  for (int i=1; i <= 60; i++){        
+    xOffset += analogRead(xAxis);    
+    yOffset += analogRead(yAxis);
+    zOffset += analogRead(zAxis);
+    }
+  xOffset /=60;  
+  yOffset /=60;
+  zOffset /=60;
+
+  Serial.print("xOffset: ");
+  Serial.print(xOffset);
+  Serial.print("   yOffset: ");
+  Serial.print(yOffset);
+  Serial.print("   zOffset: ");
+  Serial.println(zOffset);
+}
+
+
+
+asilloo
+avatar_mustafa_serkan
+*
+Newbie
+Posts: 12
+Karma: 0  [add]
+Arduino rocks
+
+Re: Selfmade Tilt compensated Compass Pitch, Roll, Yaw
+#7
+Mar 19, 2010, 10:52 pm
+Hej,
+
+I just work on this sensor with my arduino 328, ArthurSpooner  :o please upload a video to youtube so we can see what you did   8-)
+
+thanks
+VIKI68
+Guest
+
+Re: Selfmade Tilt compensated Compass Pitch, Roll, Yaw
+#8
+May 25, 2010, 02:39 am Last Edit: May 25, 2010, 02:40 am by VIKI68 Reason: 1
+Made some changes to the HMC lib.
+VIKI68
+Guest
+
+Re: Selfmade Tilt compensated Compass Pitch, Roll, Yaw
+#9
+May 25, 2010, 02:40 am
+Ok after getting this little HMC stamp, and after adding a cap otherwise it didn't work properly, i modified/extended the HMC lib to get it easy going.
+The output values of the HMC need to be scaled, as the documentation describes, the new calibrate function does just that. The output values are scaled after calibration but still just a vector so for yaw pitch and stuff you need some calculations.
+
+Lib: http://www.filejumbo.com/Download/A0733DDFF58B4FCE
+hacknfly
+Guest
+
+Re: Selfmade Tilt compensated Compass Pitch, Roll, Yaw
+#10
+Jun 10, 2010, 05:56 am
+I've been trying to get this code to work for the last week, with the sparkfun magnetometer mentioned and a wii nunchuk.  I can't for the life of me get it working.  The closest I've come is getting compensation in one direction, but even then it was a variation of around 10 degrees.  I'm using the WiiChuck class to get roll and pitch degrees and converting them to radians for use in the rest of the class.  Thanks for any help.
+VIKI68
+Guest
+
+Re: Selfmade Tilt compensated Compass Pitch, Roll, Yaw
+#11
+Jul 02, 2010, 04:36 am
+Don't forget you're just getting a vector, not x-y-z rotation.
+cooliced
+Guest
+
+Re: Selfmade Tilt compensated Compass Pitch, Roll, Yaw
+#12
+Jul 02, 2010, 04:18 pm
+very nice
+Megaionstorm
+avatar_Megaionstorm
+*
+Edison Member
+Posts: 2,045
+Karma: 23  [add]
+Wo ein Wille ist, da ist auch ein Weg !
+
+Re: Selfmade Tilt compensated Compass Pitch, Roll, Yaw
+#13
+Oct 22, 2010, 08:56 am
+The HMC5843 delivers 3 values. X, Y, Z. How can I calculate, with this 3 values, the direction in degrees ? Like the value of a normal compass !
+Mein Arduino Projekte Blog:
+http://ardu-megatank.blogspot.de/
+BastiKay
+Guest
+
+Re: Selfmade Tilt compensated Compass Pitch, Roll, Yaw
+#14
+Nov 09, 2010, 09:21 am
+Just use the atan2(Y-Axis Value , X-Axis Value)
+Multiply the result by 180/M_PI for >=0 and by -180/M_PI for <=0
+PRINTGo UpPages: [1] 2 
+Jump to:
+
+===> Exhibition
+ 
+
+Trademark
+Contact Us
+Distributors
+Careers
+Help Center
+NEWSLETTER
+Enter your email to sign up
+SUBSCRIBE
+FOLLOW US
+© 2021 Arduino
+Terms Of Service
+Privacy Policy
+Security
+Cookie Settings
