@@ -10,9 +10,9 @@ from LIBRARY.rpi_car import rpi_movement
 from LIBRARY.rpi_car_mag_calibration import write_calibration_file
 from LIBRARY.rpi_telemetry import mb_telemetry
 from time import time
-from datetime import datetime
+# from datetime import datetime
 import math
-import numpy as np
+# import numpy as np
 import matplotlib.pyplot as plt
 from scipy import integrate
 
@@ -48,10 +48,14 @@ def yaw_from_mags(mx, my, mz, norm = True):
 
 
 def roll_from_acc(board):
+    ax = board.accx
     ay = board.accy
     az = board.accz - 1
-    
-    roll = math.atan2(-ay, az)
+    mu = 0.01
+    if az > 0:
+        roll = math.atan2(ay, math.sqrt(az**2 + mu * ax**2))
+    elif az < 0:
+        roll = math.atan2(ay, -math.sqrt(az**2 + mu*ax**2))
 #    print("roll:", roll)
     return roll
 
@@ -76,7 +80,7 @@ def yaw_from_mags_tilt_compensate(board, norm = True):
     # if norm:
     #     mx, my, mz = normalize_3axis(mx, my, mz)
     
-    My = mx*math.cos(roll) + mz*math.sin(roll)
+    My = my*math.cos(roll) + mz*math.sin(roll)
     Mx = mx*math.cos(pitch)  + my*math.sin(roll)*math.sin(pitch) - mz*math.sin(pitch)*math.cos(roll)
  
     yaw = yaw_from_mags(Mx, My, mz, norm = norm)
