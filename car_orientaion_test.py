@@ -16,6 +16,12 @@ import math
 import matplotlib.pyplot as plt
 from scipy import integrate
 
+def saw(data, thresh = 180):
+    if abs(data) <= thresh:
+        return data
+    else:
+        data = -thresh + 2*data % (2*thresh + 1)
+    return data
 
 def normalize_3axis(x, y, z):
     n = math.sqrt(x**2 + y**2 + z**2)
@@ -52,7 +58,7 @@ def roll_from_acc(board):
     ay = board.accy
     az = board.accz - 1
     mu = 0.01
-    if az > 0:
+    if az >= 0:
         roll = math.atan2(ay, math.sqrt(az**2 + mu * ax**2))
     elif az < 0:
         roll = math.atan2(ay, -math.sqrt(az**2 + mu*ax**2))
@@ -92,7 +98,7 @@ def yaw_from_gyro_euler(previous_yaw, board):
     yaw = previous_yaw + board.gyroz*dt
 
     if abs(yaw) > 180:
-        yaw = -180 + yaw % (360)
+        yaw = -180 + yaw % 360
     yaw = round(yaw,3)
     return yaw
 
@@ -100,8 +106,8 @@ def yaw_from_gyros(gyros, times, init):
 
     yaw = integrate.cumtrapz(gyros, times, initial = init)[-1]
 
-    if abs(yaw) > 180:
-        yaw = -180 + yaw % (360)
+    yaw = saw(yaw)
+        
     yaw = round(yaw,3)
     return yaw
 
@@ -154,7 +160,7 @@ obstacle_threshold = 15
 voltage_threshold = 6.7
 uv_counter = 0
 
-
+sign = 1
 yaw_gyro,yaw_mag,yaw_mag_compensated =0,0,0
 
 ts, yaws_gyro, yaws_mag, yaws_mag_compensated = [], [], [], []
@@ -180,10 +186,10 @@ while(1):
 
 #        yaw_gyro = yaw_from_gyro_euler(yaw_gyro, mb)
         yaw_gyro = yaw_from_gyros(gyros, ts, gyros[0])
-        yaw_mag = yaw_from_mags(mb.magx,mb.magy,mb.magz, norm = False)
-        yaw_mag_compensated=yaw_from_mags_tilt_compensate(mb, norm = False)
+        yaw_mag = yaw_from_mags(mb.magx,mb.magy,mb.magz, norm = True)
+        yaw_mag_compensated=yaw_from_mags_tilt_compensate(mb, norm = True)
  
-        
+
         yaws_gyro.append(yaw_gyro)
         yaws_mag.append(yaw_mag)
         yaws_mag_compensated.append(yaw_mag_compensated)
@@ -243,9 +249,9 @@ while(1):
             legend = ['yaw from gyro', 'yaw from mag', 'compesated']
             plot_data_n_labels(ts, [yaws_gyro, yaws_mag, yaws_mag_compensated], title = "Yaw", xlabel = 'Time, s',
                                ylabel = 'Yaw, degs', legend = legend)
-            legend = ['magx', 'magy', 'magz']
-            plot_data_n_labels(ts, [magxs, magys, magzs], title = "IMU data", xlabel = 'Time, s',
-                               ylabel = 'Magnetometer, degs', legend = legend)
+#            legend = ['magx', 'magy', 'magz']
+#            plot_data_n_labels(ts, [magxs, magys, magzs], title = "IMU data", xlabel = 'Time, s',
+#                               ylabel = 'Magnetometer, degs', legend = legend)
         except Exception:
             pass
         break
