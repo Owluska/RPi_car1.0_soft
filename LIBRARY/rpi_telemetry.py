@@ -38,9 +38,15 @@ class mb_telemetry():
         self.dist2 = None
         
         self.mpu = None
+        self.g = 9.780318
         self.accx = None
         self.accy = None
+        self.accz = None
+        
+        self.gyrox = None
+        self.gyroy = None
         self.gyroz = None
+        
         self.magx = None
         self.magy = None
         self.magx_offset = 0
@@ -99,9 +105,10 @@ class mb_telemetry():
     def get_mpu9250_acc(self):
         if self.imu != None:
             acc = self.imu.readAccel()
-            self.accx = acc['x']
-            self.accy = acc['y']
-            self.accz = acc['z']
+            #self.g = 1
+            self.accx = acc['x'] * self.g
+            self.accy = acc['y'] * self.g
+            self.accz = acc['z'] * self.g
 #            return self.accx, self.accy, self.accz
 #        else:
 #            return None, None, None

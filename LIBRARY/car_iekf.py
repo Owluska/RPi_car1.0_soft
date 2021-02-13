@@ -22,7 +22,8 @@ class car_iekf:
     F = np.zeros((15, 15), dtype = 'double')
     G = np.zeros((15, 15), dtype = 'double')
     TOL = 1e-8
-    ROT = np.eye(3) + np.ones((3,3)) * TOL
+    #ROT = np.eye(3) + np.ones((3,3)) * TOL
+    ROT = np.eye(3)
     vzero = np.zeros((1,3), dtype = 'double')
     np.seterr(divide='warn', invalid='warn')
     np.set_printoptions(precision=3)
@@ -36,7 +37,7 @@ class car_iekf:
         self.H = np.zeros((6,15), dtype = 'double')
         #Q - covariance matrix of the noise propagation
         #P - state covariance matrix         
-        self.P, self.Q = self.init_covariances()
+        self.P, self.Q = self.init_covariances(gyro_std, acc_std)
                 #Q - covariance matrix of the measurment noise
         self.R = np.zeros((6,6), dtype = 'double') 
         self.S = self.ahat(self.H, self.P) + self.R
@@ -54,13 +55,14 @@ class car_iekf:
         #tmp = np.concatenate(gyro_bias, self.vzero, self.vzero)
 
         #print(gyro_bias)
+        self.x[:3] = self.ROT
         self.x[9:12] = np.concatenate((gyro_bias, self.vzero, self.vzero))
         self.x[12:15] = np.concatenate((acc_bias, self.vzero, self.vzero))
         
         self.v = np.array([[.0, .0, .0]], dtype = 'double')
         self.p = np.array([[.0, .0, .0]], dtype = 'double')
+        self.a = np.array([[.0, .0, .0]], dtype = 'double')
         self.biases = np.zeros((6, 3), dtype = 'double')
-        
     
     def ahat(self, A, H):
         return A @ H @ A.T
@@ -73,7 +75,7 @@ class car_iekf:
                          [ phi[2],        0., -phi[0]],
                          [-phi[1],    phi[0],      0.]], dtype = 'double')
     
-    def init_covariances(self,  gyro_std = 2e-3, acc_std = 7e-2, mag_std = 1e-3, b_gyro_std = 5e-5, b_acc_std = 4e-5, b_mag_std = 3e-5):
+    def init_covariances(self,  gyro_std, acc_std, mag_std = 1e-3, b_gyro_std = 1e-6, b_acc_std = 14e-6, b_mag_std = 3e-5):
         Q = np.eye(15, dtype = 'double')
         
         gyro_stds = np.ones((1,3)) * gyro_std
@@ -88,7 +90,7 @@ class car_iekf:
         
         P = np.eye(15, dtype = 'double') * 0.01
         
-        self.R = np.eye(6, dtype = 'double') * 0.01
+        self.R = np.eye(6, dtype = 'double') * 0.05
         return P, Q
     
     def normalize(self, phi):
@@ -100,9 +102,10 @@ class car_iekf:
     def SO3_exp(self, phi):
         '''phi - vector[1,3]'''
         norm = self.normalize(phi)
-        # print(norm)
-        if norm.any() < self.TOL:           
-            return  self.ID3 + self.wedge(phi)
+        #print(phi)
+        for e in phi:
+            if e < self.TOL:           
+                return  self.ID3 + self.wedge(phi)
         
         u = phi/norm
         
@@ -121,10 +124,17 @@ class car_iekf:
         
     def SO3_left_jacob(self, matrix):
         norm = self.normalize(matrix)
-        # print(matrix)
-        if norm.any() < self.TOL:
-            J = self.ID3[0] + 1/2 * self.wedge(matrix[0])
-            return 
+#        print(matrix)
+        for row in matrix:
+            for e in row:
+                if e <  self.TOL:
+                    J = self.ID3 + 1/2 * self.wedge(matrix[0])
+                    #print(J)
+                    return 
+#        if matrix.any() < self.TOL:
+#            print('null')
+#            J = self.ID3[0] + 1/2 * self.wedge(matrix[0])
+#            return 
 
         u = matrix[1]/norm[1]
         
@@ -153,23 +163,24 @@ class car_iekf:
     #def f(self, gyro, acc, dt, gyro_bias = [.0,.0,.0], acc_bias = [.0,.0,.0]):
     def f(self, gyro, acc, dt):
         #z = self.get_z(self, gyro, acc, gyro_bias = gyro_bias, acc_bias = acc_bias)
-        gyro_bias = self.biases[0]
-        acc_bias = self.biases[3]
+        gyro_bias = self.x[9]
+        acc_bias = self.x[12]
         
-        self.biases[:3] = gyro_bias
+        #self.biases[:3] = gyro_bias
         #omega = (gyro - gyro_bias)
         #self.ROT = np.dot(self.ROT, self.SO3_exp(omega*dt))
 
         # if self.ROT.all() >= self.TOL:
         #     print("ltl")
+        #print(gyro, gyro_bias)
         self.ROT = self.ROT @ self.SO3_exp((gyro - gyro_bias)*dt)
-        
-        #print(self.ROT, end = '\n\n\n')
+#        print(self.ROT)
+
         self.a = self.ROT @ (acc - acc_bias) + self.g
-        #print(self.v.shape)
-        self.v = self.v + self.a * dt
+#        print(self.a)
+        self.v += self.a * dt
         
-        self.p = self.p + self.v * dt
+        self.p += self.v * dt
         
         #print(self.x[0:3].shape)
         self.x[0:3] = self.ROT
@@ -179,7 +190,8 @@ class car_iekf:
         # print(tmp)
         self.x[3:6]= np.concatenate((self.v, self.vzero, self.vzero))
         self.x[6:9] = np.concatenate((self.p, self.vzero, self.vzero))
-
+#        self.x[9] = gyro
+#        self.x[12] = acc
 
         return self.x
     
@@ -223,8 +235,10 @@ class car_iekf:
         ROT = self.x[:3]
         
         self.H[0:3, 3:6] = ROT.T
+        self.H[0:3, 9:12] = -self.ID3
         
         self.H[3:6, 0:3] = -ROT.T @ self.wedge(self.g)
+        self.H[3:6, 12:] = -self.ID3
     
     def G_matrix(self, dt):
         '''G = [zeros + _G]*dt
@@ -265,10 +279,11 @@ class car_iekf:
             _P = FPF^T + GQG^T
             '''
         self.x = self.f(gyro, acc, dt)
+        #print(x)
         self.F_matrix(dt)
         self.G_matrix(dt)
         
-        self.P = self.ahat(self.F*dt, self.P) + self.ahat(self.G, self.Q.T)
+        self.P = self.ahat(self.F, self.P) + self.ahat(self.G, self.Q.T)
         
     #def solve(A, B):
         
@@ -287,114 +302,110 @@ class car_iekf:
         #print(self.R)
         self.S = self.ahat(self.H, self.P) + self.R
        
-
-        #TODO: check why determinant is equals to zero
-        # try:
-        #     S_inv = np.linalg.inv(self.S)
-        #     self.K = self.P @ self.H.T @ S_inv
-        # except Exception:
-        #     pass
             
         S_inv = np.linalg.pinv(self.S)
         self.K = self.P @ self.H.T @ S_inv       
         
         e = self.K @ y
+        
+        #print(e)
         xi = np.copy(self.x)
-        for i in range(5):
-            i1 = i * 3
-            i2 = (i+1) * 3
-            xi[i1:i2] = self.SO3_left_jacob(e[i1:i2])
-        # print(xi.shape)
         for i in range(3):
             i1 = i * 3
             i2 = (i+1) * 3
+            xi[i1:i2] = self.SO3_left_jacob(e[i1:i2])
+#        # print(xi.shape)
+#        for i in range(3):
+#            i1 = i * 3
+#            i2 = (i+1) * 3
             self.x[i1:i2] = self.x[i1:i2] @ xi[i1:i2]
-        self.x[9:15] += xi[9:]
+        #print(xi)
+        #self.x[9:15] += xi[9:15]
         
         self.P = (self.ID15 - self.K @ self.H) @ self.P
         self.P  = (self.P + self.P.T)/2                  
 
-imu = []
-
-
-import pandas as pd
-imu_df = pd.read_excel('imu_model.xlsx', engine='openpyxl')
-
-
-cols = imu_df.columns[:5]
-cols = cols.append(imu_df.columns[8:])
-cols = cols.append(imu_df.columns[5:8])
-imu_df = imu_df[cols]
-
-len_cols = len(cols[2:])
-
-# for r in imu_df.iterrows():    
-#     r = r[1]['Gyrox':]
-#     tmp = []
-#     for l in range(len_cols):
-#         tmp.append(r[l])
-#     imu.append(tmp)
-
-# imu = np.array([np.reshape(i, (3,3)) for i in imu])
-ts = np.array(imu_df.Time)
-gyros = np.array(imu_df[cols[2:5]])
-#gyros = gyros * 180 / np.pi
-
-
-
-
-acc = np.array(imu_df[cols[5:8]])
-g = 9.780318
-acc = acc * g
-
-mags = np.array(imu_df[cols[8:11]])
-
-biases = np.zeros((1,6), dtype = 'double')
-gx, gy, gz, ax, ay, az = [],[],[],[],[],[]
-for i in range(100):
-    gx.append(gyros[i, 0])
-    gy.append(gyros[i, 1])
-    gz.append(gyros[i, 2])
-
-    ax.append(acc[i, 0])
-    ay.append(acc[i, 1])
-    az.append(acc[i, 2])
-
-biases[:,0] = np.array(gx, dtype ='double').mean()
-biases[:,1] = np.array(gy, dtype ='double').mean()
-biases[:,2] = np.array(gz, dtype ='double').mean()
-
-biases[:,3] = np.array(ax, dtype ='double').mean()
-biases[:,4] = np.array(ay, dtype ='double').mean()
-biases[:,5] = np.array(az, dtype ='double').mean()
-
-ps = []
-
-
-dt = ts[1]-ts[0]
-kf = car_iekf(gyros[0], acc[0], mags[0],
-              gyro_bias= biases[:,:3], acc_bias=biases[:,3:])
-
-# kf.f(gyros[0], acc[0], dt)
-# kf.get_z(gyros[0], acc[0])
-
-# kf.propagate(gyros[0], acc[0], dt)
-# kf.update(gyros[0], acc[0], dt)
-
-t0 = 0
-
-gyros = gyros[200:]
-acc = gyros[200:]
-mags = mags[200:]
-ts = ts[200:]
-for g, a, m, t in zip(gyros, acc, mags, ts):          
-    
-    dt = t - t0
-    if dt == 0:
-        dt = 0.01
-    kf.propagate(g, a, dt)
-    kf.update(g, a, dt)
-    # print("t: {}, p:{}".format(t, kf.p))
-    ps.append(kf.p)
-    t0 = t
-    ps.append(kf.x[6:9])      
+#imu = []
+#
+#
+#import pandas as pd
+#imu_df = pd.read_excel('imu_model.xlsx', engine='openpyxl')
+#
+#
+#cols = imu_df.columns[:5]
+#cols = cols.append(imu_df.columns[8:])
+#cols = cols.append(imu_df.columns[5:8])
+#imu_df = imu_df[cols]
+#
+#len_cols = len(cols[2:])
+#
+## for r in imu_df.iterrows():    
+##     r = r[1]['Gyrox':]
+##     tmp = []
+##     for l in range(len_cols):
+##         tmp.append(r[l])
+##     imu.append(tmp)
+#
+## imu = np.array([np.reshape(i, (3,3)) for i in imu])
+#ts = np.array(imu_df.Time)
+#gyros = np.array(imu_df[cols[2:5]])
+##gyros = gyros * 180 / np.pi
+#
+#
+#
+#
+#acc = np.array(imu_df[cols[5:8]])
+#g = 9.780318
+#acc = acc * g
+#
+#mags = np.array(imu_df[cols[8:11]])
+#
+#biases = np.zeros((1,6), dtype = 'double')
+#gx, gy, gz, ax, ay, az = [],[],[],[],[],[]
+#for i in range(100):
+#    gx.append(gyros[i, 0])
+#    gy.append(gyros[i, 1])
+#    gz.append(gyros[i, 2])
+#
+#    ax.append(acc[i, 0])
+#    ay.append(acc[i, 1])
+#    az.append(acc[i, 2])
+#
+#biases[:,0] = np.array(gx, dtype ='double').mean()
+#biases[:,1] = np.array(gy, dtype ='double').mean()
+#biases[:,2] = np.array(gz, dtype ='double').mean()
+#
+#biases[:,3] = np.array(ax, dtype ='double').mean()
+#biases[:,4] = np.array(ay, dtype ='double').mean()
+#biases[:,5] = np.array(az, dtype ='double').mean()
+#
+#ps = []
+#
+#
+#dt = ts[1]-ts[0]
+#kf = car_iekf(gyros[0], acc[0], mags[0],
+#              gyro_bias= biases[:,:3], acc_bias=biases[:,3:])
+#
+## kf.f(gyros[0], acc[0], dt)
+## kf.get_z(gyros[0], acc[0])
+#
+## kf.propagate(gyros[0], acc[0], dt)
+## kf.update(gyros[0], acc[0], dt)
+#
+#t0 = 0
+#
+#gyros = gyros[200:]
+#acc = gyros[200:]
+#mags = mags[200:]
+#ts = ts[200:]
+#for g, a, m, t in zip(gyros, acc, mags, ts):          
+#    
+#    dt = t - t0
+#    if dt == 0:
+#        dt = 0.01
+#    kf.propagate(g, a, dt)
+#    kf.update(g, a, dt)
+#    # print("t: {}, p:{}".format(t, kf.p))
+#    ps.append(kf.p)
+#    t0 = t
+#    ps.append(kf.x[6:9])      
