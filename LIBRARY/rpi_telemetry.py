@@ -38,11 +38,13 @@ class mb_telemetry():
         self.dist2 = None
         
         self.mpu = None
-        self.g = 9.780318
+        self.g = 9.84
         self.accx = None
         self.accy = None
         self.accz = None
         
+        
+        self.D2R = 3.14/180
         self.gyrox = None
         self.gyroy = None
         self.gyroz = None
@@ -116,9 +118,9 @@ class mb_telemetry():
     def get_mpu9250_gyro(self):
         if self.imu != None:
             gyro = self.imu.readGyro()
-            self.gyrox = gyro['x']
-            self.gyroy = gyro['y']
-            self.gyroz = gyro['z']
+            self.gyrox = gyro['x'] * self.D2R
+            self.gyroy = gyro['y'] * self.D2R
+            self.gyroz = gyro['z'] * self.D2R
 #            return self.gyrox, self.gyroy, self.gyroz
 #        else:
 #            return None, None, None

@@ -10,7 +10,7 @@ from LIBRARY.rpi_car import rpi_movement
 from LIBRARY.rpi_car_mag_calibration import write_calibration_file
 from LIBRARY.rpi_telemetry import mb_telemetry
 from LIBRARY.car_iekf import car_iekf
-from time import time
+from time import time, sleep
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -44,7 +44,7 @@ def measure_bias_n_std(mb, points = 10):
         
         axs.append(mb.accx)
         ays.append(mb.accy)
-        azs.append(mb.accz - g)
+        azs.append(mb.accz)
         
     print()
     biases[:, :3] = np.array([np.mean(gxs), np.mean(gys), np.mean(gzs)])
@@ -93,7 +93,7 @@ kf = car_iekf(gyros, accs,
               gyro_bias= biases[:,:3], acc_bias=biases[:,3:],
               gyro_std = stds[:, :3], acc_std = stds[:, 3:])    
 
-print("x: ", kf.x)
+#print("P: ", kf.P)
 
 print(sdata)
 
@@ -101,8 +101,9 @@ toMove = True
 counter = 0
 
 tmp = []
+data = []
 while(1):
-    if counter > 100:
+    if counter > 50:
         break
     try:
         counter += 1
@@ -116,6 +117,7 @@ while(1):
         mb.telemetry()
         gyros = np.array([mb.gyrox, mb.gyroy, mb.gyroz])
         accs = np.array([mb.accx, mb.accy, mb.accz])
+        
         biases = np.concatenate((gyros, accs))
         tmp.append(biases)
         bss = np.array(tmp)
@@ -123,20 +125,24 @@ while(1):
             biases[i] = np.mean(bss.T[i])
         
         #print(biases)
-#        kf.x[9] = biases[:3]
-#        kf.x[12] = biases[3:]
+        gyro_bias = biases[:3]
+        acc_bias = biases[3:]
         ts.append(round(mb.time, 3))
         
         kf.propagate(gyros, accs, _dt)
-        #kf.update(gyros, accs, _dt)
+        kf.update(gyros, accs, gyro_bias, acc_bias, _dt)
         
         
-        ps.append(kf.p)
+        
         x ,y ,z = kf.p[0][0], kf.p[0][1], kf.p[0][2]
         vx, vy, vz = kf.v[0][0], kf.v[0][1], kf.v[0][2]
+        ps.append([x,y,z])
 
         sdata = "{:.4f} {:.3f} {:.3f} {:.3f}".format(_dt, x, y, z)
         print(sdata)
+        #print(mb.gyrox, mb.gyroy, mb.gyroz, mb.accx, mb.accy, mb.accz)
+        data.append([mb.gyrox, mb.gyroy, mb.gyroz, mb.accx, mb.accy, mb.accz])
+#        sleep(0.1)
         #print(kf.x)
         
         try:       
@@ -158,23 +164,27 @@ while(1):
 
 
     except KeyboardInterrupt:
-        car.stop()
-        car.turn_center()
-        x = [ps[i][0][0] for i in range(len(ts))]
-        y = [ps[i][0][1] for i in range(len(ts))]
-        z = [ps[i][0][2] for i in range(len(ts))]
-        
-        plt.plot(ts, x)
-        plt.plot(ts, y)
-        plt.plot(ts, z)
+        break
+#        car.stop()
+#        car.turn_center()
+#        
+#        x = [ps[i][0][0] for i in range(len(ts))]
+#        y = [ps[i][0][1] for i in range(len(ts))]
+#        z = [ps[i][0][2] for i in range(len(ts))]
+#        
+#        plt.plot(ts, x)
+#        plt.plot(ts, y)
+#        plt.plot(ts, z)
 
 car.stop()
 car.turn_center()        
 
-x = [ps[i][0][0] for i in range(len(ts))]
-y = [ps[i][0][1] for i in range(len(ts))]
-z = [ps[i][0][2] for i in range(len(ts))]
+xs = [ps[i][0] for i in range(len(ts))]
+ys = [ps[i][1] for i in range(len(ts))]
+zs = [ps[i][2] for i in range(len(ts))]
 
-plt.plot(ts, x)
-plt.plot(ts, y)
-plt.plot(ts, z)
+plt.plot(ts, xs)
+plt.plot(ts, ys)
+plt.plot(ts, zs)
+plt.legend(['x(t)','y(t)','z(t)'])
+plt.grid()
