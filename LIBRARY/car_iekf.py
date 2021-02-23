@@ -21,7 +21,7 @@ class car_iekf:
     
     F = np.zeros((15, 15), dtype = 'double')
     G = np.zeros((15, 15), dtype = 'double')
-    TOL = 1e-8
+    TOL = 1e-5
     #ROT = np.eye(3) + np.ones((3,3)) * TOL
     ROT = np.eye(3)
     vzero = np.zeros((1,3), dtype = 'double')
@@ -101,32 +101,19 @@ class car_iekf:
     
     def SO3_exp(self, phi):
         '''phi - vector[1,3]'''
-#        norm = self.normalize(phi)
         norm = np.linalg.norm(phi)
-#        for e in norm:
-#            if e < self.TOL:           
-#                return  self.ID3 #+ self.wedge(phi)
         if norm == 0:
             #print("Zero norm")
             return self.ID3
         u = phi/norm
         
-        theta = norm
-        # print(u)
-        c = np.cos(theta)
-        s = np.sin(theta)
+        c = np.cos(norm)
+        s = np.sin(norm)
              
-        #print(c.shape, s.shape, u.shape)
-        
-        #result = self.ID3 + self.wedge(u) * s + (u @ u.T-self.ID3) * (1-c)
-        #print(np.cross(self.ID3, c))
         result = self.ID3 * c + self.wedge(u) * s + (u @ u.T) * (1 - c)
-        # print(result.shape)
         return result
-        # return phi
         
     def SO3_left_jacob(self, matrix):
-        #norm = self.normalize(matrix)
 
 #        for row in matrix:
 #            for e in row:
@@ -138,15 +125,14 @@ class car_iekf:
             return self.ID3
         u = matrix[0]/norm
         
-        theta = norm
-        c = np.cos(theta)
-        s = np.sin(theta)
+        c = np.cos(norm)
+        s = np.sin(norm)
         J = np.empty((3,3), dtype = 'double')
         # print(matrix.shape)
        
         # print((u).shape)
-        J = (s/theta) * self.ID3 + (1-c)/theta * self.wedge(u)+\
-        (self.ID3 - s/theta) * u @ u.T
+        J = (s/norm) * self.ID3 + (1-c)/norm * self.wedge(u)+\
+        (self.ID3 - s/norm) * u @ u.T
         # print(J, end = '\n\n\n\n')
         return J
     
@@ -171,15 +157,19 @@ class car_iekf:
         gyro_bias = self.x[9]
         acc_bias = self.x[12]
         
-        self.ROT = self.ROT @ self.SO3_exp((gyro - gyro_bias)*dt)
-        #self.ROT = self.ROT @ self.SO3_exp((gyro)*dt)
+        self.a = self.ROT @ (acc - acc_bias) + self.g      
+        
+        
+
 
         #self.a = self.ROT @ (acc - acc_bias) + self.g
-        self.a = self.ROT @ (acc - acc_bias) #+ self.g
+
         self.v += self.a * dt
         
         self.p += self.v * dt
         
+        self.ROT = self.ROT @ self.SO3_exp((gyro - gyro_bias)*dt)
+        #self.ROT = self.wedge(gyro - gyro_bias) @ self.ROT       
         self.x[0:3] = self.ROT
 
         self.x[3:6]= np.concatenate((self.v, self.vzero, self.vzero))
@@ -230,9 +220,9 @@ class car_iekf:
         self.H[0:3, 3:6] = ROT.T
         #self.H[0:3, 9:12] = -self.ID3
         
-        self.H[3:6, 0:3] = -ROT.T @ self.wedge(self.g) 
+        self.H[3:6, 0:3] = ROT.T @ self.g 
         self.H[3:6, 12:] = -self.ID3
-        self.H = self.H * dt
+        #self.H = self.H * dt
     
     def G_matrix(self, dt):
         '''G = [zeros + _G]*dt
@@ -300,7 +290,7 @@ class car_iekf:
         self.S = self.ahat(self.H, self.P) + self.R
         #print(self.S, end = '\n\n\n\n')
 #        print(self.R, end = '\n\n\n\n')    
-        S_inv = np.linalg.inv(self.S)
+        S_inv = np.linalg.pinv(self.S)
         #print(S_inv, end ='\n\n\n\n')
         self.K = self.P @ self.H.T @ S_inv       
         
@@ -313,6 +303,7 @@ class car_iekf:
             i2 = (i+1) * 3
             xi[i1:i2] = self.SO3_left_jacob(e[i1:i2])
             self.x[i1:i2] = self.x[i1:i2] @ xi[i1:i2]
+            #self.x[i1:i2] += xi[i1:i2]
 
         self.x[9:15] += e[9:15]
 #        self.x += e 
