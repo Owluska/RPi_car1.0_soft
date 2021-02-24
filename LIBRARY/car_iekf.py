@@ -137,13 +137,6 @@ class car_iekf:
         return J
     
     def get_z(self, gyro, acc, gyro_bias = [.0,.0,.0], acc_bias = [.0,.0,.0]):
-#         wedge_gyro = self.wedge(self.normalize(gyro))
-#         wedge_acc = self.wedge(self.normalize(acc))
-#         wedge_gyro = self.wedge(gyro)
-#         wedge_acc  = self.wedge(acc)
-#         self.z[:3, :3] = wedge_gyro
-#         self.z[:3,3:6] = wedge_acc
-
 
          z = self.z.copy()
          z = z.T
@@ -152,18 +145,12 @@ class car_iekf:
          self.z = z.T
 #         print(z.shape)
     
-    #def f(self, gyro, acc, dt, gyro_bias = [.0,.0,.0], acc_bias = [.0,.0,.0]):
     def f(self, gyro, acc, dt):
         gyro_bias = self.x[9]
         acc_bias = self.x[12]
         
         self.a = self.ROT @ (acc - acc_bias) + self.g      
-        
-        
-
-
-        #self.a = self.ROT @ (acc - acc_bias) + self.g
-
+                
         self.v += self.a * dt
         
         self.p += self.v * dt
@@ -175,19 +162,7 @@ class car_iekf:
         self.x[3:6]= np.concatenate((self.v, self.vzero, self.vzero))
         self.x[6:9] = np.concatenate((self.p, self.vzero, self.vzero))
         return self.x
-    
-#    def h(self, dt):
-#        ROT = self.x[:3]
-#        v = self.x[3]
-#        z = self.z.copy()
-#        # print(z.shape)
-#        z = z.T
-#        
-#        z[0] = v @ ROT.T
-#        z[3] = ROT.T @ (v * dt)
-#        z = z.T
-#        return z    
-    
+        
     def F_matrix(self, dt):
         '''F = I + A*dt
            A = dX/dX
@@ -310,87 +285,4 @@ class car_iekf:
         self.P = (self.ID15 - self.K @ self.H) @ self.P
 #        self.P  = (self.P + self.P.T)/2                  
 
-#imu = []
-#
-#
-#import pandas as pd
-#imu_df = pd.read_excel('imu_model.xlsx', engine='openpyxl')
-#
-#
-#cols = imu_df.columns[:5]
-#cols = cols.append(imu_df.columns[8:])
-#cols = cols.append(imu_df.columns[5:8])
-#imu_df = imu_df[cols]
-#
-#len_cols = len(cols[2:])
-#
-## for r in imu_df.iterrows():    
-##     r = r[1]['Gyrox':]
-##     tmp = []
-##     for l in range(len_cols):
-##         tmp.append(r[l])
-##     imu.append(tmp)
-#
-## imu = np.array([np.reshape(i, (3,3)) for i in imu])
-#ts = np.array(imu_df.Time)
-#gyros = np.array(imu_df[cols[2:5]])
-##gyros = gyros * 180 / np.pi
-#
-#
-#
-#
-#acc = np.array(imu_df[cols[5:8]])
-#g = 9.780318
-#acc = acc * g
-#
-#mags = np.array(imu_df[cols[8:11]])
-#
-#biases = np.zeros((1,6), dtype = 'double')
-#gx, gy, gz, ax, ay, az = [],[],[],[],[],[]
-#for i in range(100):
-#    gx.append(gyros[i, 0])
-#    gy.append(gyros[i, 1])
-#    gz.append(gyros[i, 2])
-#
-#    ax.append(acc[i, 0])
-#    ay.append(acc[i, 1])
-#    az.append(acc[i, 2])
-#
-#biases[:,0] = np.array(gx, dtype ='double').mean()
-#biases[:,1] = np.array(gy, dtype ='double').mean()
-#biases[:,2] = np.array(gz, dtype ='double').mean()
-#
-#biases[:,3] = np.array(ax, dtype ='double').mean()
-#biases[:,4] = np.array(ay, dtype ='double').mean()
-#biases[:,5] = np.array(az, dtype ='double').mean()
-#
-#ps = []
-#
-#
-#dt = ts[1]-ts[0]
-#kf = car_iekf(gyros[0], acc[0], mags[0],
-#              gyro_bias= biases[:,:3], acc_bias=biases[:,3:])
-#
-## kf.f(gyros[0], acc[0], dt)
-## kf.get_z(gyros[0], acc[0])
-#
-## kf.propagate(gyros[0], acc[0], dt)
-## kf.update(gyros[0], acc[0], dt)
-#
-#t0 = 0
-#
-#gyros = gyros[200:]
-#acc = gyros[200:]
-#mags = mags[200:]
-#ts = ts[200:]
-#for g, a, m, t in zip(gyros, acc, mags, ts):          
-#    
-#    dt = t - t0
-#    if dt == 0:
-#        dt = 0.01
-#    kf.propagate(g, a, dt)
-#    kf.update(g, a, dt)
-#    # print("t: {}, p:{}".format(t, kf.p))
-#    ps.append(kf.p)
-#    t0 = t
-#    ps.append(kf.x[6:9])      
+   

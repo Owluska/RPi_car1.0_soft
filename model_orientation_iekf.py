@@ -1,4 +1,4 @@
-from LIBRARY.car_iekf import car_iekf 
+from LIBRARY.car_iekf_2 import car_iekf 
 import numpy as np              
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -16,8 +16,8 @@ for t, i in zip(ts, range(len(ts))):
     t0 = t
     dts[i, :] = dt
 
-accs = np.array([model.accx, model.accy, model.accz]).T
-gyros = np.array([model.gx, model.gy, model.gz]).T * D2R
+accs = np.array([-model.accx, -model.accy, model.accz]).T
+gyros = np.array([-model.gx, -model.gy, model.gz]).T * D2R
 
 m_ps = np.array([model.x, model.y, model.z]).T
 m_vs = np.array([model.vx, model.vy, model.vz]).T
@@ -42,14 +42,16 @@ biases, stds = measure_bias_n_std(model)
 # gyro_bias= biases[:,:3]
 # acc_bias=biases[:,3:]
 
-acc_bias = np.zeros((1,3), dtype = 'double')
-gyro_bias = np.zeros((1,3), dtype = 'double')
-kf = car_iekf(gyros, accs, 
-              gyro_bias = gyro_bias, acc_bias = acc_bias,
-              gyro_std = stds[:, :3], acc_std = stds[:, 3:]) 
+# acc_bias = np.zeros((1,3), dtype = 'double')
+# gyro_bias = np.zeros((1,3), dtype = 'double')
+ps_t0 = np.array([m_ps[0]])
+vs_t0 = np.array([m_vs[0]])
+kf = car_iekf(gyros, accs, gyro_std = stds[:, :3], acc_std = stds[:, 3:], v = vs_t0,  p = ps_t0) 
 
-sdata = 'Time x y z'
-print(sdata)
+
+# print(ps_t0, vs_t0)
+# sdata = 'Time x y z'
+# print(sdata)
 
 toMove = True
 counter = 0
@@ -57,26 +59,22 @@ counter = 0
 tmp = []
 data = []
 while(1):
-    if counter > 800:
+    if counter > 999:
         break
     try:    
         counter += 1
+        x, y, z = kf.p[0][0], kf.p[0][1], kf.p[0][2]
+        ps.append([x,y,z])
+        
         
         kf.propagate(gyros[counter], accs[counter], dts[counter])
-        kf.update(gyros[counter], accs[counter],
-                  gyro_bias, acc_bias, dts[counter])
+        kf.update(gyros[counter], accs[counter], dts[counter])
         
         
-        
-        x, y, z = kf.p[0][0], kf.p[0][1], kf.p[0][2]
-        vx, vy, vz = kf.v[0][0], kf.v[0][1], kf.v[0][2]
-        ps.append([x,y,z])
+        # vx, vy, vz = kf.v[0][0], kf.v[0][1], kf.v[0][2]
 
         sdata = "{:.4f} {:.3f} {:.3f} {:.3f}".format(ts[counter][0], x, y, z)
         #print(sdata)
-
-        #print(counter, kf.a)
-
 
     except KeyboardInterrupt:
         break
