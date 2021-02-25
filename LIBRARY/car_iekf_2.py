@@ -16,7 +16,7 @@ class car_iekf:
     
     state_dim = 9
     
-    g = np.array([0, 0, - 9.80655], dtype = 'double')
+    g = np.array([0, 0, 9.80655], dtype = 'double')
     
     ID = np.eye(state_dim, dtype='double')
     ID3 = np.eye(3, dtype = 'double')
@@ -38,7 +38,9 @@ class car_iekf:
         self.Wg = self.wedge(self.g.T)
         
         self.z = np.zeros((3,6), dtype = 'double')
+        self.y = np.copy(self.z)
         self.x = np.zeros((self.state_dim, 3), dtype = 'double')
+        self.e = np.zeros_like(self.x)       
         
         self.p = p      
         self.v = v
@@ -62,17 +64,17 @@ class car_iekf:
                          [-phi[1],    phi[0],      0.]], dtype = 'double')
     
     def init_covariances(self,  dim, gyro_std, acc_std):
-        Q = np.eye(dim, dtype = 'double')
+        Q = np.eye(dim, dtype = 'double') * 0.005
         
-        ROT_stds = np.eye(3)* 0.01
+        # ROT_stds = np.eye(3)* 0.01
         gyro_stds = np.ones((1,3)) * gyro_std
         acc_stds = np.ones((1,3)) * acc_std
 
-        Q[0:3, 0:3]   = ROT_stds
-        Q[3:6, 3:6]  *= gyro_stds ** 2
-        Q[6:9, 6:9]  *= acc_stds ** 2
+        # Q[0:3, 0:3]   = ROT_stds
+        # Q[3:6, 3:6]  *= gyro_stds ** 2
+        # Q[6:9, 6:9]  *= acc_stds ** 2
         
-        P = np.eye(dim, dtype = 'double') * 0.001
+        P = np.eye(dim, dtype = 'double') * 0.1
         
         R = np.eye(6, dtype = 'double')
         R[:3, :3] *= gyro_stds ** 2
@@ -96,7 +98,7 @@ class car_iekf:
         c = np.cos(norm)
         s = np.sin(norm)
              
-        result = self.ID3 * c + self.wedge(u) * s + (u @ u.T) * (1 - c)
+        result = c * self.ID3 + s * self.wedge(u) + (1 - c) * (u @ u.T)
         return result
         
     def SO3_left_jacob(self, matrix):
@@ -122,26 +124,25 @@ class car_iekf:
         # print(J, end = '\n\n\n\n')
         return J
     
-    def get_z(self, gyro, acc, gyro_bias = [.0,.0,.0], acc_bias = [.0,.0,.0]):
+    def h(self, gyro, acc):
+        self.z[:, 0] = gyro
+        self.z[:, 3] = acc
+         
+         # self.z[:3, 0:3] = self.wedge(gyro)
+         # self.z[:3, 3:6] = self.wedge(acc)
 
-         z = self.z.copy()
-         z = z.T
-         z[0] = gyro
-         z[3] = acc 
-         self.z = z.T
-#         print(z.shape)
+
     
     def f(self, gyro, acc, dt):
 
         
-        self.p += self.v * dt
+        self.a = self.ROT @ acc #+ self.g                      
         
-        self.a = self.ROT @ acc - self.g                      
         self.v += self.a * dt
-        
+        self.p += self.v * dt + 1/2 * self.a * dt ** 2
                
         self.ROT = self.ROT @ self.SO3_exp(gyro*dt)
-        # self.ROT = self.wedge(gyro) @ self.ROT       
+        #self.ROT = self.ROT @ self.wedge(gyro) * dt      
         
         self.x[0:3] = self.ROT
         self.x[3]= self.v
@@ -160,7 +161,7 @@ class car_iekf:
         self.F = self.ID + A * dt
         
     
-    def H_matrix(self, dt):
+    def H_matrix(self):
         '''H = H*dt
            G = dX/dz
            X = [ROT, v, p, gyro_bias, acc_bias]
@@ -168,7 +169,7 @@ class car_iekf:
            '''
       
         self.H[0:3, 3:6] = self.ROT.T        
-        self.H[3:6, 0:3] = self.ROT.T @ self.Wg
+        self.H[3:6, 0:3] = self.ROT.T @ self.g #+ self.g
 
     
     
@@ -200,11 +201,11 @@ class car_iekf:
             x = exp(Ky) * _x
             P = (I - KH)_P
             '''
-        self.H_matrix(dt)
-        self.get_z(gyro, acc)
-        y = self.z - (self.H @ self.x).T
-
-        #print(y, end = '\n\n\n\n')
+        self.H_matrix()
+        self.h(gyro, acc)
+        #print((self.H @ self.x).T)
+        self.y = self.z - (self.H @ self.x).T
+        #print(np.max(y), end = '\n\n\n\n')
         
         self.S = self.ahat(self.H, self.P) + self.R
         #print(self.S, end = '\n\n\n\n')
@@ -213,16 +214,23 @@ class car_iekf:
         #print(S_inv, end ='\n\n\n\n')
         self.K = self.P @ self.H.T @ S_inv       
         
-        e = self.K @ y.T
+        self.e = self.K @ self.y.T
         # print(e, end = '\n\n\n\n')
 #        e = np.zeros_like(e)
         #print(e, end = '\n\n\n\n')
 
-        self.x[0:3] = self.x[0:3] @ self.SO3_left_jacob(e[0:3])
-        self.x[3] = self.x[3] @  self.SO3_left_jacob(e[3:6])
-        self.x[6] = self.x[6] @  self.SO3_left_jacob(e[6:9]) 
-#        self.x += e 
+        # self.x[0:3] = self.x[0:3] @ self.SO3_left_jacob(self.e[0:3])
+        # self.x[3] = self.x[3] @  self.SO3_left_jacob(self.e[3:6])
+        # self.x[6] = self.x[6] @  self.SO3_left_jacob(self.e[6:9])
+        
+        self.x += self.e         
+        self.ROT = self.x[0:3]
+        self.v[:] = self.x[3]
+        self.p[:] = self.x[6]
+        
+        # print(self.p.shape)
+
         self.P = (self.ID - self.K @ self.H) @ self.P
-        self.P  = (self.P + self.P.T)/2                  
+        #self.P  = (self.P + self.P.T)/2                  
 
    

@@ -6,6 +6,8 @@ import math
 model = pd.read_excel('imu_model.xlsx', engine='openpyxl')
 
 D2R = math.pi/180
+
+dl = model.shape[0] - 1 
 ts = np.array([model.time]).T
 
 dts = np.zeros_like(ts)
@@ -16,8 +18,9 @@ for t, i in zip(ts, range(len(ts))):
     t0 = t
     dts[i, :] = dt
 
-accs = np.array([-model.accx, -model.accy, model.accz]).T
-gyros = np.array([-model.gx, -model.gy, model.gz]).T * D2R
+accs = np.array([model.accx, model.accy, model.accz]).T
+#gyros = np.array([model.gx, model.gy, model.gz]).T 
+gyros = np.array([model.gx, model.gy, model.gz]).T * D2R
 
 m_ps = np.array([model.x, model.y, model.z]).T
 m_vs = np.array([model.vx, model.vy, model.vz]).T
@@ -36,9 +39,10 @@ def measure_bias_n_std(df, points = 10):
     stds[:, 3:] = np.array([np.std(df.accx[:points]), np.std(df.accy[:points]), np.std(df.accz[:points])])
     return biases, stds
 
-ps = []
-
-biases, stds = measure_bias_n_std(model)
+ps, vs, acs = [], [], []
+e1, e2, zzs = [],[],[]
+ys = []
+biases, stds = measure_bias_n_std(model, points= dl)
 # gyro_bias= biases[:,:3]
 # acc_bias=biases[:,3:]
 
@@ -56,26 +60,34 @@ kf = car_iekf(gyros, accs, gyro_std = stds[:, :3], acc_std = stds[:, 3:], v = vs
 toMove = True
 counter = 0
 
-tmp = []
-data = []
+
+#data = []
 while(1):
-    if counter > 999:
+    if counter > dl:
         break
     try:    
-        counter += 1
+
         x, y, z = kf.p[0][0], kf.p[0][1], kf.p[0][2]
-        ps.append([x,y,z])
+        vx, vy, vz = kf.v[0][0], kf.v[0][1], kf.v[0][2]
+        ax, ay, az = kf.v[0][0], kf.v[0][1], kf.v[0][2]
         
+        ps.append([x,y,z])
+        vs.append([vx,vy,vz])
+        acs.append([ax,ay,az])
+        
+        e1.append(kf.e[3])
+        e2.append(kf.e[6])
+        ys.append(np.max(kf.y))
         
         kf.propagate(gyros[counter], accs[counter], dts[counter])
         kf.update(gyros[counter], accs[counter], dts[counter])
-        
+        zzs.append(kf.z)        
         
         # vx, vy, vz = kf.v[0][0], kf.v[0][1], kf.v[0][2]
 
         sdata = "{:.4f} {:.3f} {:.3f} {:.3f}".format(ts[counter][0], x, y, z)
         #print(sdata)
-
+        counter += 1
     except KeyboardInterrupt:
         break
 
