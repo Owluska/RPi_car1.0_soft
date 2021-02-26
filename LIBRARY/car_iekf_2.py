@@ -16,7 +16,7 @@ class car_iekf:
     
     state_dim = 9
     
-    g = np.array([0, 0, 9.80655], dtype = 'double')
+    g = np.array([0, 0, -9.80655], dtype = 'double')
     
     ID = np.eye(state_dim, dtype='double')
     ID3 = np.eye(3, dtype = 'double')
@@ -64,9 +64,9 @@ class car_iekf:
                          [-phi[1],    phi[0],      0.]], dtype = 'double')
     
     def init_covariances(self,  dim, gyro_std, acc_std):
-        Q = np.eye(dim, dtype = 'double') * 0.005
-        
-        # ROT_stds = np.eye(3)* 0.01
+#        Q = np.eye(dim, dtype = 'double') * 0.005
+        Q = np.random.multivariate_normal(np.zeros(dim), 0.005*np.eye(dim), size=dim)
+        ROT_stds = np.eye(3)* (0.01 ** 2)
         gyro_stds = np.ones((1,3)) * gyro_std
         acc_stds = np.ones((1,3)) * acc_std
 
@@ -74,7 +74,7 @@ class car_iekf:
         # Q[3:6, 3:6]  *= gyro_stds ** 2
         # Q[6:9, 6:9]  *= acc_stds ** 2
         
-        P = np.eye(dim, dtype = 'double') * 0.1
+        P = np.eye(dim, dtype = 'double') * 0.05
         
         R = np.eye(6, dtype = 'double')
         R[:3, :3] *= gyro_stds ** 2
@@ -90,7 +90,7 @@ class car_iekf:
     def SO3_exp(self, phi):
         '''phi - vector[1,3]'''
         norm = np.linalg.norm(phi)
-        if norm == 0:
+        if norm < self.TOL:
             #print("Zero norm")
             return self.ID3
         u = phi/norm
@@ -136,7 +136,7 @@ class car_iekf:
     def f(self, gyro, acc, dt):
 
         
-        self.a = self.ROT @ acc #+ self.g                      
+        self.a = self.ROT @ acc + self.g                      
         
         self.v += self.a * dt
         self.p += self.v * dt + 1/2 * self.a * dt ** 2
@@ -158,7 +158,7 @@ class car_iekf:
         A[6:9, 3:6]  =  self.ID3
 
         # print(dt)
-        self.F = self.ID + A * dt
+        self.F = self.ID + A * dt + 1/2 * A @ A * dt
         
     
     def H_matrix(self):
@@ -219,11 +219,11 @@ class car_iekf:
 #        e = np.zeros_like(e)
         #print(e, end = '\n\n\n\n')
 
-        # self.x[0:3] = self.x[0:3] @ self.SO3_left_jacob(self.e[0:3])
-        # self.x[3] = self.x[3] @  self.SO3_left_jacob(self.e[3:6])
-        # self.x[6] = self.x[6] @  self.SO3_left_jacob(self.e[6:9])
+        self.x[0:3] = self.x[0:3] @ self.SO3_left_jacob(self.e[0:3])
+        self.x[3] = self.x[3] @  self.SO3_left_jacob(self.e[3:6])
+        self.x[6] = self.x[6] @  self.SO3_left_jacob(self.e[6:9])
         
-        self.x += self.e         
+        # self.x += self.e         
         self.ROT = self.x[0:3]
         self.v[:] = self.x[3]
         self.p[:] = self.x[6]
