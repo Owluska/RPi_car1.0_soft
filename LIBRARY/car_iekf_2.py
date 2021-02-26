@@ -16,7 +16,7 @@ class car_iekf:
     
     state_dim = 9
     
-    g = np.array([0, 0, -9.80655], dtype = 'double')
+    g = np.array([[0, 0, 9.80655]], dtype = 'double')
     
     ID = np.eye(state_dim, dtype='double')
     ID3 = np.eye(3, dtype = 'double')
@@ -24,10 +24,10 @@ class car_iekf:
     
     F = np.zeros((state_dim, state_dim), dtype = 'double')
    
-    ROT = np.eye(3)
+    # ROT = np.eye(3)
     v0 = np.zeros((1,3), dtype = 'double')
           
-    def __init__(self, gyro, acc, gyro_std = 2e-3, acc_std = 7e-2, v = v0, p = v0, a = v0):
+    def __init__(self, gyro, acc, gyro_std = 2e-3, acc_std = 7e-2, v = v0, ROT = np.eye(3), p = v0, a = v0):
         self.H = np.zeros((6,self.state_dim), dtype = 'double')
     
         self.P, self.Q, self.R = self.init_covariances(self.state_dim, gyro_std, acc_std)
@@ -35,13 +35,14 @@ class car_iekf:
 
         self.K = np.zeros((self.state_dim,6), dtype = 'double')
 
-        self.Wg = self.wedge(self.g.T)
+        self.Wg = self.wedge(self.g[:,])
         
         self.z = np.zeros((3,6), dtype = 'double')
         self.y = np.copy(self.z)
         self.x = np.zeros((self.state_dim, 3), dtype = 'double')
         self.e = np.zeros_like(self.x)       
         
+        self.ROT = ROT
         self.p = p      
         self.v = v
         self.a = a
@@ -74,7 +75,7 @@ class car_iekf:
         # Q[3:6, 3:6]  *= gyro_stds ** 2
         # Q[6:9, 6:9]  *= acc_stds ** 2
         
-        P = np.eye(dim, dtype = 'double') * 0.05
+        P = np.eye(dim, dtype = 'double') * 0.01
         
         R = np.eye(6, dtype = 'double')
         R[:3, :3] *= gyro_stds ** 2
@@ -86,6 +87,20 @@ class car_iekf:
         if norm != 0:
             phi = phi / norm       
         return phi
+    
+    def SO3_exp(self, phi):
+        '''phi - vector[1,3]'''
+        norm = np.linalg.norm(phi)
+        if norm < self.TOL:
+            #print("Zero norm")
+            return self.ID3
+        u = phi/norm
+        
+        c = np.cos(norm)
+        s = np.sin(norm)
+             
+        result = c * self.ID3 + s * self.wedge(u) + (1 - c) * (u @ u.T)
+        return result
     
     def SO3_exp(self, phi):
         '''phi - vector[1,3]'''
@@ -134,14 +149,14 @@ class car_iekf:
 
     
     def f(self, gyro, acc, dt):
-
+        self.ROT = self.ROT @ self.SO3_exp(gyro*dt)
         
         self.a = self.ROT @ acc + self.g                      
         
         self.v += self.a * dt
         self.p += self.v * dt + 1/2 * self.a * dt ** 2
                
-        self.ROT = self.ROT @ self.SO3_exp(gyro*dt)
+        #self.ROT = self.ROT @ self.SO3_exp(gyro*dt)
         #self.ROT = self.ROT @ self.wedge(gyro) * dt      
         
         self.x[0:3] = self.ROT
@@ -169,7 +184,7 @@ class car_iekf:
            '''
       
         self.H[0:3, 3:6] = self.ROT.T        
-        self.H[3:6, 0:3] = self.ROT.T @ self.g #+ self.g
+        self.H[3:6, 0:3] = self.ROT.T @ self.g.T #+ self.g
 
     
     
