@@ -10,7 +10,7 @@ import numpy as np
 
 class car_iekf:
     
-    TOL = 1e-8
+    TOL = 1e-12
     np.seterr(divide='warn', invalid='warn')
     np.set_printoptions(precision=3)
     
@@ -35,7 +35,7 @@ class car_iekf:
 
         self.K = np.zeros((self.state_dim,6), dtype = 'double')
 
-        self.Wg = self.wedge(self.g[:,])
+        self.Wg = self.wedge(self.g[0])
         
         self.z = np.zeros((3,6), dtype = 'double')
         self.y = np.copy(self.z)
@@ -58,7 +58,8 @@ class car_iekf:
 #       return np.einsum("ij, jk, lk->il", A, H, A)
     
     def wedge(self, phi):
-        phi = phi.T
+        #print(phi)
+        #phi = phi.T
         # print(phi.shape)
         return np.array([[     0.,   -phi[2],  phi[1]],
                          [ phi[2],        0., -phi[0]],
@@ -100,21 +101,22 @@ class car_iekf:
         s = np.sin(norm)
              
         result = c * self.ID3 + s * self.wedge(u) + (1 - c) * (u @ u.T)
+        #result = self.ID3 + s * self.wedge(u) + (1 - c) * (u @ u)
         return result
     
-    def SO3_exp(self, phi):
-        '''phi - vector[1,3]'''
-        norm = np.linalg.norm(phi)
-        if norm < self.TOL:
-            #print("Zero norm")
-            return self.ID3
-        u = phi/norm
+    # def SO3_exp(self, phi):
+    #     '''phi - vector[1,3]'''
+    #     norm = np.linalg.norm(phi)
+    #     if norm < self.TOL:
+    #         #print("Zero norm")
+    #         return self.ID3
+    #     u = phi/norm
         
-        c = np.cos(norm)
-        s = np.sin(norm)
+    #     c = np.cos(norm)
+    #     s = np.sin(norm)
              
-        result = c * self.ID3 + s * self.wedge(u) + (1 - c) * (u @ u.T)
-        return result
+    #     result = c * self.ID3 + s * self.wedge(u) + (1 - c) * (u @ u.T)
+    #     return result
         
     def SO3_left_jacob(self, matrix):
 
@@ -149,14 +151,18 @@ class car_iekf:
 
     
     def f(self, gyro, acc, dt):
-        self.ROT = self.ROT @ self.SO3_exp(gyro*dt)
-        
-        self.a = self.ROT @ acc + self.g                      
-        
-        self.v += self.a * dt
-        self.p += self.v * dt + 1/2 * self.a * dt ** 2
-               
+        # gyro = np.array([gyro])
+        # acc = np.array([acc])
         #self.ROT = self.ROT @ self.SO3_exp(gyro*dt)
+        
+        self.p += self.v * dt + 1/2 * self.a * dt ** 2
+        self.v += self.a * dt    
+        
+        
+        self.a = self.ROT @ acc + self.g
+        #self.a = np.array([acc])
+               
+        self.ROT = self.ROT @ self.SO3_exp(gyro*dt)
         #self.ROT = self.ROT @ self.wedge(gyro) * dt      
         
         self.x[0:3] = self.ROT

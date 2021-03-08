@@ -22,6 +22,8 @@ accs = np.array([model.accx, model.accy, model.accz]).T
 #gyros = np.array([model.gx, model.gy, model.gz]).T 
 gyros = np.array([model.gx, model.gy, model.gz]).T * D2R
 
+# m_as = np.array([model.rax, model.ray, model.raz]).T 
+# m_gs = np.array([model.rgx, model.rgy, model.rgz]).T * D2R
 m_ps = np.array([model.x, model.y, model.z]).T
 m_vs = np.array([model.vx, model.vy, model.vz]).T
 
@@ -84,16 +86,16 @@ kf = car_iekf(gyros, accs, gyro_std = stds[:, :3], acc_std = stds[:, 3:], ROT = 
 toMove = True
 counter = 0
 
-
+l = dl
 #data = []
 while(1):
-    if counter > dl:
+    if counter > l:
         break
     try:    
 
 
         
-        kf.propagate(gyros[counter], accs[counter], dts[counter])
+        kf.propagate(gyros[counter-1], accs[counter-1], dts[counter-1])
         #kf.update(gyros[counter], accs[counter], dts[counter])
         zzs.append(kf.z)        
         
@@ -132,9 +134,9 @@ mys = m_ps[:, 1]
 
 
 plt.plot(xs, ys)
-plt.plot(mxs,mys)
+plt.plot(mxs[:l],mys[:l])
 plt.plot()
-#plt.legend(['x(t)','y(t)','z(t)'])
+plt.legend(['model', 'sim'])
 plt.grid()
 
 vs = np.array(vs)

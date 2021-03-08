@@ -15,7 +15,7 @@ import numpy as np
 D2R = math.pi/180
 R2D = 180/math.pi
 np.set_printoptions(precision=3)
-motion_def_path = 'gnss-ins-sim/demo_motion_def_files/'
+motion_def_path = 'D:/!Phyton_Source/car_iekf/gnss-ins-sim/demo_motion_def_files/'
 fs = 100.0          # IMU sample frequency
 fs_mag = fs         # magnetometer sample frequency, not used for now
 
@@ -65,7 +65,7 @@ def test_path_gen():
     sim.plot(['ref_att_euler', 'gyro', 'mag', 'accel'], opt={'ref_pos': '2d'})
     # save simulation data to files
     res = []
-    res = sim.get_data(['time', 'ref_pos', 'ref_vel', 'gyro', 'mag', 'accel'])
+    res = sim.get_data(['time', 'ref_pos', 'ref_vel', 'ref_accel', 'ref_gyro', 'gyro', 'mag', 'accel'])
     return res
 # if __name__ == '__main__':
 imu_data = test_path_gen()
@@ -76,7 +76,7 @@ imu_df = pd.DataFrame()
 imu_df.insert(0, "time", imu_data[0])
 
 poss = imu_data[1].T
-cols = ['x', 'y', 'z']
+cols = ['rx', 'ry', 'rz']
 lenght = len(cols)
 
 
@@ -85,12 +85,27 @@ for p, c, i in zip(poss, cols, range(lenght)):
     imu_df.insert(lc, c, p - p.mean())
 
 vels = imu_data[2].T
-cols = ['vx', 'vy', 'vz']
+cols = ['rvx', 'rvy', 'rvz']
 lenght = len(cols)
 for p, c, i in zip(vels, cols, range(lenght)):
     lc = i + 1
     imu_df.insert(lc, c, p)
+    
 
+ref_accs = imu_data[2].T
+cols = ['rax', 'ray', 'raz']
+lenght = len(cols)
+for p, c, i in zip(ref_accs, cols, range(lenght)):
+    lc = i + 1
+    imu_df.insert(lc, c, p)
+    
+ref_gyros = imu_data[2].T
+cols = ['rgx', 'rgy', 'rgz']
+lenght = len(cols)
+for p, c, i in zip(ref_gyros, cols, range(lenght)):
+    lc = i + 1
+    imu_df.insert(lc, c, p)
+    
 gyros = imu_data[3][0].T * R2D
 cols = ['gx', 'gy', 'gz']
 lenght = len(cols)
