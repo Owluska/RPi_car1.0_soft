@@ -59,12 +59,7 @@ class ekf:
      
         #Compute corrected covariance
         p_cov = (np.eye(9) - K @ self.h_jac) @ p_cov
-        #save data
-        self.p_est = np.append(self.p_est, p.reshape(1,3), axis = 0)
-        self.v_est = np.append(self.v_est, v.reshape(1,3), axis = 0)
-        self.q_est = np.append(self.q_est, q.reshape(1,4), axis = 0)
-        self.p_cov = np.append(self.p_cov, p_cov.reshape(1,9,9), axis = 0)
-       # return p_hat, v_hat, q_hat, p_cov_hat
+        return p, v, q, p_cov
 
 
     def get_F(self, dt, f, ROT):
@@ -96,7 +91,7 @@ class ekf:
         
         p = self.p_est[k] + dt * self.v_est[k] + 0.5 * dt ** 2 * a
         v = self.v_est[k] + dt * a
-        print(a * dt)
+
         
         angle = w * dt
         qw = Quaternion(axis_angle=angle)
@@ -111,14 +106,18 @@ class ekf:
         return p, v, q, p_cov
     
     def loop(self, f, w, dt, k, update = False, sensor_var = 0.0, sensor_data = 0.0):
+        #print(k)
         p, v, q, p_cov = self.propagate(f, w, dt, k)
         if update:
-            self.measurement_update(sensor_var, sensor_data, p, v, q, p_cov)
-        else:
-            self.p_est = np.append(self.p_est, p.reshape(1,3), axis = 0)
-            self.v_est = np.append(self.v_est, v.reshape(1,3), axis = 0)
-            self.q_est = np.append(self.q_est, q.reshape(1,4), axis = 0)
-            self.p_cov = np.append(self.p_cov, p_cov.reshape(1, 9, 9), axis = 0)
+            p, v, q, p_cov = self.measurement_update(sensor_var, sensor_data, p, v, q, p_cov)
+            
+        #print(p, end = '\n\n')
+        
+        self.p_est = np.append(self.p_est, p.reshape(1,3), axis = 0)
+        self.v_est = np.append(self.v_est, v.reshape(1,3), axis = 0)
+        self.q_est = np.append(self.q_est, q.reshape(1,4), axis = 0)
+        self.p_cov = np.append(self.p_cov, p_cov.reshape(1, 9, 9), axis = 0)
+
             
             
         
