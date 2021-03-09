@@ -30,7 +30,8 @@ class ekf:
         self.v_est = np.zeros_like(self.p_est)  # velocity estimates
         self.q_est = np.zeros([1, 4])           # orientation estimates as quaternions
         self.p_cov = np.zeros([1, 9, 9])        # covariance matrices at each timestep
-        self.dt = np.zeros([1,1])
+        #self.dt = np.zeros([1,1])
+        self.a = np.zeros_like(self.p_est) 
         
     def init_data(self, p, v, q, p_cov):
     # Set initial values.
@@ -86,16 +87,19 @@ class ekf:
         #Linearize the motion model and compute Jacobians
         q_prev = Quaternion(*self.q_est[k])
         self.ROT = q_prev.to_mat()
-
+        #print(self.ROT)
         a = self.ROT @ f  + self.g
+
+        self.a = np.append(self.a, a.reshape(1,3), axis = 0)
         
         p = self.p_est[k] + dt * self.v_est[k] + 0.5 * dt ** 2 * a
         v = self.v_est[k] + dt * a
 
         
         angle = w * dt
-        qw = Quaternion(axis_angle=angle)
-        q = q_prev.quat_mult_left(qw)
+        qw = Quaternion(axis_angle=angle).quat_mult_left(q_prev)
+        q = Quaternion(*qw).normalize().to_numpy()
+
 
         F = self.get_F(dt, f, self.ROT)
         N = self.get_N(dt)

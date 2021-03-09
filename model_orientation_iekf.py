@@ -22,6 +22,8 @@ fs = np.array([model.accx, model.accy, model.accz]).T
 #gyros = np.array([model.gx, model.gy, model.gz]).T 
 ws = np.array([model.gx, model.gy, model.gz]).T *  D2R
 
+wss = np.ones_like(ws) * 0.7
+
 # m_as = np.array([model.rax, model.ray, model.raz]).T 
 # m_gs = np.array([model.rgx, model.rgy, model.rgz]).T * D2R
 m_ps = np.array([model.x, model.y, model.z]).T
@@ -54,7 +56,7 @@ var_pos = 0.001
 
 ps_t0 = np.array([m_ps[0]])
 vs_t0 = np.array([m_vs[0]])
-q_t0 = Quaternion(*ws[0]).to_numpy()
+q_t0 = Quaternion(*ws[0]).normalize().to_numpy()
 p_cov_t0 = np.zeros(9)
 
 
@@ -67,9 +69,10 @@ kf.var_imu_mag = np.std(stds[:, 6:9])
 
 
 #because we already extract first element for initialization
-fs = fs[0:]
-ws = ws[0:]
-m_ps = m_ps[0:]
+# fs = fs[0:]
+# ws = ws[0:]
+# m_ps = m_ps[0:]
+# m_ps = dts[0:]
 dl =  fs.shape[0] - 1
 
 
@@ -78,13 +81,14 @@ i = 0
 l = dl
 np.set_printoptions(precision=3)
 #data = []
+useKF = True
 while(1):
     if i > l:
         break
     try:            
         print(kf.p_est[i])
         kf.loop(fs[i], ws[i], dts[i], i,
-                update = True, sensor_var = var_pos, sensor_data = m_ps[i])
+                update = useKF, sensor_var = var_pos, sensor_data = m_ps[i])
         i += 1
     except KeyboardInterrupt:
         break
