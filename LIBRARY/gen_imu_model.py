@@ -7,6 +7,8 @@ Created on Wed Jan 27 11:40:58 2021
 # if script doesn't work, check file path in console
 import matplotlib.pyplot as plt
 #import matplotlib.pyplot as plt
+import sys
+sys.path.append('../gnss_ins_sim/gnss_ins_sim/')
 from gnss_ins_sim.sim import imu_model
 from gnss_ins_sim.sim import ins_sim
 import math
@@ -15,7 +17,7 @@ import numpy as np
 D2R = math.pi/180
 R2D = 180/math.pi
 np.set_printoptions(precision=3)
-motion_def_path = 'D:/!Phyton_Source/car_iekf/gnss-ins-sim/demo_motion_def_files/'
+motion_def_path = 'gnss-ins-sim/demo_motion_def_files/'
 fs = 100.0          # IMU sample frequency
 fs_mag = fs         # magnetometer sample frequency, not used for now
 
@@ -54,7 +56,7 @@ def test_path_gen():
 
     #### start simulation
     sim = ins_sim.Sim([fs, fs, fs_mag],
-                      motion_def_path+"turn.csv",
+                      motion_def_path+"motion_def-ins.csv",
                       ref_frame=1,
                       imu=imu,
                       mode=None,
