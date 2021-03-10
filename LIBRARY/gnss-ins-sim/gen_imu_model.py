@@ -90,14 +90,14 @@ def parse_gdata(df, raw_data, labels, index):
     lenght = len(labels)    
     for d, c, i in zip(data, labels, range(lenght)):
         lc = i + 1
-        df.insert(lc, c, d - d[0])
+        df.insert(lc, c, d - d)
 
 def parse_sdata(df, raw_data, labels, index):
     data = raw_data[index][0].T
     lenght = len(labels)
     for d, c, i in zip(data, labels, range(lenght)):
         lc = i + 1
-        df.insert(lc, c, d - d)
+        df.insert(lc, c, d)
     
 
 import pandas as pd
@@ -106,9 +106,11 @@ gps_df = pd.DataFrame()
 gps_df.insert(0, "time", imu_data[1])
 cols = ['gx', 'gy', 'gz']
 parse_gdata(gps_df, imu_data, cols, 2)
+gps_df.set_index("time")
 
 imu_df = pd.DataFrame()
 imu_df.insert(0, "time", imu_data[0])
+
 
 cols = ['rx', 'ry', 'rz']
 parse_data(imu_df, imu_data, cols, 3)
@@ -129,6 +131,9 @@ parse_sdata(imu_df, imu_data, cols, 9)
 cols = ['accx', 'accy', 'accz']
 parse_sdata(imu_df, imu_data, cols, 10)    
 
-    
-imu_df.to_excel("imu_df.xlsx")
-gps_df.to_excel("gps_df.xlsx")
+imu_df.set_index("time")
+
+df = imu_df.merge(gps_df, how = 'left')
+df.to_excel("df.xlsx")
+# imu_df.to_excel("imu_df.xlsx")
+# gps_df.to_excel("gps_df.xlsx")

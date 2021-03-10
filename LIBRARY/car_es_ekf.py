@@ -56,8 +56,8 @@ class ekf:
         # 3.3 Correct predicted state
         p += dp
         v += dv        
-        q = Quaternion(axis_angle=d_phi).quat_mult_right(q)
-     
+        dq = Quaternion(axis_angle=d_phi).quat_mult_right(q)
+        q =  Quaternion(*dq).normalize().to_numpy()
         #Compute corrected covariance
         p_cov = (np.eye(9) - K @ self.h_jac) @ p_cov
         return p, v, q, p_cov

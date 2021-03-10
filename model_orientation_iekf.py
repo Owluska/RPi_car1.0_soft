@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from math import *
-model = pd.read_excel('imu_model.xlsx', engine='openpyxl')
+model = pd.read_excel('sim_data/df.xlsx', engine='openpyxl')
 
 D2R = pi/180
 
@@ -19,15 +19,14 @@ for t, i in zip(ts, range(len(ts))):
     dts[i, :] = dt
 
 fs = np.array([model.accx, model.accy, model.accz]).T
-#gyros = np.array([model.gx, model.gy, model.gz]).T 
-ws = np.array([model.gx, model.gy, model.gz]).T *  D2R
+ws = np.array([model.gyrox, model.gyroy, model.gyroz]).T *  D2R
+od - np.array(model.odom)
 
-wss = np.ones_like(ws) * 0.7
+start_point = np.array([model.rx[0], model.ry[0],model.rz[0]])
+x0,y0,z0 = start_point[0], start_point[1], start_point[2]
 
-# m_as = np.array([model.rax, model.ray, model.raz]).T 
-# m_gs = np.array([model.rgx, model.rgy, model.rgz]).T * D2R
-m_ps = np.array([model.x, model.y, model.z]).T
-m_vs = np.array([model.vx, model.vy, model.vz]).T
+m_ps = np.array([model.rx - x0, model.ry - y0, model.rz - z0]).T
+m_vs = np.array([model.rvx, model.rvy, model.rvz]).T
 
 def measure_bias_n_std(df, points = 10):
 
@@ -36,11 +35,11 @@ def measure_bias_n_std(df, points = 10):
     print("Measuring bias and std, amount of poinst: ", points)
         
     print()
-    biases[:, :3] = np.array([np.mean(df.gx[:points]), np.mean(df.gy[points]), np.mean(df.gz[:points])])
+    biases[:, :3] = np.array([np.mean(df.gyrox[:points]), np.mean(df.gyroy[points]), np.mean(df.gyroz[:points])])
     biases[:, 3:6] = np.array([np.mean(df.accx[:points]), np.mean(df.accy[:points]), np.mean(df.accz[:points])])
     biases[:, 6:] = np.array([np.mean(df.magx[:points]), np.mean(df.magy[:points]), np.mean(df.magz[:points])])
     
-    stds[:, :3] = np.array([np.std(df.gx[:points]), np.std(df.gy[:points]), np.std(df.gz[:points])])
+    stds[:, :3] = np.array([np.std(df.gyrox[:points]), np.std(df.gyroy[:points]), np.std(df.gyroz[:points])])
     stds[:, 3:6] = np.array([np.std(df.accx[:points]), np.std(df.accy[:points]), np.std(df.accz[:points])])
     stds[:, 6:9] = np.array([np.std(df.magx[:points]), np.std(df.magy[:points]), np.std(df.magz[:points])])
     
@@ -82,11 +81,14 @@ l = dl
 np.set_printoptions(precision=3)
 #data = []
 useKF = True
+
+step = int(dl/100)
 while(1):
     if i > l:
         break
     try:            
-        print(kf.p_est[i])
+        if l % step == 0:
+            print(kf.p_est[i])
         kf.loop(fs[i], ws[i], dts[i], i,
                 update = useKF, sensor_var = var_pos, sensor_data = m_ps[i])
         i += 1
