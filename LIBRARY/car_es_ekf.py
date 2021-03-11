@@ -109,10 +109,10 @@ class ekf:
         
         return p, v, q, p_cov
     
-    def loop(self, f, w, dt, k, update = False, sensor_var = 0.0, sensor_data = 0.0):
+    def update(self, f, w, dt, k, useKF = False, sensor_var = 0.0, sensor_data = 0.0):
         #print(k)
         p, v, q, p_cov = self.propagate(f, w, dt, k)
-        if update:
+        if useKF:
             p, v, q, p_cov = self.measurement_update(sensor_var, sensor_data, p, v, q, p_cov)
             
         #print(p, end = '\n\n')

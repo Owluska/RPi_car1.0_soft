@@ -20,7 +20,7 @@ for t, i in zip(ts, range(len(ts))):
 
 fs = np.array([model.accx, model.accy, model.accz]).T
 ws = np.array([model.gyrox, model.gyroy, model.gyroz]).T *  D2R
-od - np.array(model.odom)
+#od - np.array(model.odom)
 
 start_point = np.array([model.rx[0], model.ry[0],model.rz[0]])
 x0,y0,z0 = start_point[0], start_point[1], start_point[2]
@@ -89,8 +89,8 @@ while(1):
     try:            
         if l % step == 0:
             print(kf.p_est[i])
-        kf.loop(fs[i], ws[i], dts[i], i,
-                update = useKF, sensor_var = var_pos, sensor_data = m_ps[i])
+        #fs[i], ws[i], dts[i], i, update = useKF, sensor_var = var_pos, sensor_data = m_ps[i]
+        kf.update(fs[i], ws[i], dts[i], i, useKF = useKF, sensor_var = var_pos, sensor_data = m_ps[i])
         i += 1
     except KeyboardInterrupt:
         break
