@@ -108,9 +108,9 @@ class mb_telemetry():
         if self.imu != None:
             acc = self.imu.readAccel()
             #self.g = 1
-            self.accx = acc['x'] * self.g
-            self.accy = acc['y'] * self.g
-            self.accz = acc['z'] * self.g
+            self.accx = acc['x'] 
+            self.accy = acc['y'] 
+            self.accz = acc['z']
 #            return self.accx, self.accy, self.accz
 #        else:
 #            return None, None, None
@@ -192,11 +192,11 @@ class mb_telemetry():
         sleep(0.020)
         
         self.get_mpu9250_acc()
-#        sleep(0.010)
+        sleep(0.010)
 
         self.dist2 = self.get_distance(2)        
         self.get_mpu9250_gyro()
-#        sleep(0.010)
+        sleep(0.010)
         
         self.get_mpu9250_mag()
         sleep(0.020)
