@@ -212,7 +212,7 @@ class mb_telemetry():
         sleep(0.010)
         
         self.get_mpu9250_mag()
-        sleep(0.020)
+        sleep(0.010)
    
 
         

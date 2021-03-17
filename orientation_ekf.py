@@ -101,8 +101,11 @@ bias_w = np.array([ 0.027, -0.041,  0.018])
 #var_f = np.std(fs, axis=0)
 var_f = np.array([0.124, 0.065, 0.012])
 bias_f = np.array([-0.531, -0.486,  0.575])
-toMove = True
-counter = 0
+
+
+es_var = np.array([0.037, 0.061, 0.043])
+
+
 
 tmp = []
 data = []
@@ -121,7 +124,7 @@ ts = np.zeros([1,1])
 dts = np.zeros([1,1])
 
 kf = ekf()
-
+kf.g = np.array([0, 0, -5.43])
 kf.var_f = var_f
 kf.var_w = var_w
 kf.var_m = var_m
@@ -152,6 +155,10 @@ useKF = True
 sensors_data = np.zeros([1,9])
 sdata = 'Time x y z'
 print(sdata)
+
+
+toMove = True
+counter = 0
 while(1):
     if counter > 200:
         break
@@ -173,11 +180,11 @@ while(1):
         
         
         #m = angle_normalize(m)
-        e = np.array(eulers_mag_acc(fs, ms)).reshape(1,3)
+        e = np.array(eulers_mag_acc(f, m)).reshape(1,3)
         es = np.append(es, e, axis = 0)
-#        ws = np.append(ws, w.reshape(1,3), axis = 0)
-#        fs = np.append(fs, w.reshape(1,3), axis = 0)
-#        ms = np.append(ms, m.reshape(1,3), axis = 0)
+        ws = np.append(ws, w.reshape(1,3), axis = 0)
+        fs = np.append(fs, f.reshape(1,3), axis = 0)
+        ms = np.append(ms, m.reshape(1,3), axis = 0)
         print(kf.p_est[counter])
         
         if useKF:

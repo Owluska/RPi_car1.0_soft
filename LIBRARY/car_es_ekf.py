@@ -82,10 +82,11 @@ class ekf:
         ID = np.eye(3)
         
         F = np.eye((9), dtype = 'double')
-        F[:3, 3:6] = ID * dt
+        F[:3, 3:6] = ID
         #print(f)
         #F[3:6, 6:9] = -self.ROT @ skew_symmetric(f) * dt
-        F[3:6, 6:9] = -self.skew_matrix(self.ROT @ f) * dt
+        F[3:6, 6:9] = -self.skew_matrix(self.ROT @ f)
+        F *= dt
         return F
     
     def skew_matrix(self, matrix_R3):
