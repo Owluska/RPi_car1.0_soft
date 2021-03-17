@@ -17,10 +17,19 @@ class mb_telemetry():
     def __init__(self):
         self.imu = None
         
-        self.ina = None
+        self.ina1 = None
+        self.ina2 = None
+        
+        self.mb_adress = 0x40
+        self.dc_adress = 0x41
+        
         self.SHUNT_OHMS = 0.01
+        
         self.motors_voltage = None
         self.motors_current = None
+        
+        self.rpi_voltage = None
+        self.rpi_current = None
         
         self.US1 = None
         self.US1_TRIG = 22
@@ -76,13 +85,13 @@ class mb_telemetry():
         return self.imu    
 
     
-    def setup_ina219(self):
+    def setup_ina219(self, adress):
         try:
-            self.ina = INA219(self.SHUNT_OHMS)
-            self.ina.configure()
+            ina = INA219(self.SHUNT_OHMS, address=adress)
+            ina.configure()
         except Exception:
-            self.ina = None
-        return self.ina
+            ina = None
+        return ina
     
     def setup_US_ports(self, triger, echo):
         wiringpi.pinMode(echo, wiringpi.GPIO.INPUT)
@@ -91,18 +100,19 @@ class mb_telemetry():
         wiringpi.digitalWrite(triger, wiringpi.GPIO.LOW)
     
     def init_all(self):
-        self.ina = self.setup_ina219()
+        self.ina1 = self.setup_ina219(self.mb_adress)
+        self.ina2 = self.setup_ina219(self.dc_adress)
         self.imu = self.setup_mpu9250()
         self.US1 = self.setup_US_ports(self.US1_TRIG,self.US1_ECHO)
         self.US2 = self.setup_US_ports(self.US2_TRIG,self.US2_ECHO)
     
-    def get_data_ina219(self):
-        if self.ina != None:
-            self.motors_voltage = round(self.ina.voltage(), 2)
-            self.motors_current = round(self.ina.current(), 2)            
-#            return self.motors_voltage, self.motors_current
-#        else:
-#            return None, None
+    def get_data_ina219(self, ina):
+        if ina != None:
+            voltage = round(ina.voltage(), 2)
+            current = round(ina.current(), 2)            
+            return voltage, current
+        else:
+            return None, None
 
     def get_mpu9250_acc(self):
         if self.imu != None:
@@ -188,7 +198,10 @@ class mb_telemetry():
         self.time = round(self.time, 3)
         self.dist1 = self.get_distance(1) 
         
-        self.get_data_ina219()
+        self.motors_voltage, self.motors_current = self.get_data_ina219(self.ina1)
+        sleep(0.020)
+        
+        self.rpi_voltage, self.rpi_current = self.get_data_ina219(self.ina2)
         sleep(0.020)
         
         self.get_mpu9250_acc()
