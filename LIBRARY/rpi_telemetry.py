@@ -213,6 +213,11 @@ class mb_telemetry():
         
         self.get_mpu9250_mag()
         sleep(0.010)
+        
+#        self.dist1 = self.get_distance(1)
+#        sleep(0.038)
+#        self.dist2 = self.get_distance(2)
+#        sleep(0.038)
    
 
         

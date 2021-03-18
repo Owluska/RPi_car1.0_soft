@@ -6,12 +6,12 @@ Created on Wed Mar 17 14:42:31 2021
 @author: root
 """
 
-from LIBRARY.US_mp_example import US
+from LIBRARY.rpi_US import US
 import numpy as np
 import matplotlib.pyplot as plt
-from time import time
-#import multiprocessing
-from multiprocessing import Pool, cpu_count, Process
+from time import time, sleep
+
+from multiprocessing import Pool, cpu_count, Process, Value, Manager
 
 US1_TRIG = 22
 US1_ECHO = 17
@@ -21,41 +21,24 @@ US2_ECHO = 23
 
 back = US(trig = US1_TRIG, echo = US1_ECHO)
 front = US(trig = US2_TRIG, echo = US2_ECHO)
-#ds = np.array([[0]])
-#ts = np.array([[0]])
 
-#d = back.get_distance()
-#
-#t = .0
-#dt = time()
 
 n = cpu_count()
 pool_size = 2
 #pool = Pool(processes = 2)
 pool = []
 
-def US_pooling(US, stop):
-#    t = .0
-#    d = back.get_distance()
-#    ds = np.array([[d]])
-#    ts = np.array([[0]])
-#    dt = time()
+def US_pooling(US, label, ret_value):
     while(1):
-    #for i in range(100):
+        try:
+            d = US.get_distance()
+            ret_value[label] = d
 
-#        dt = time() - dt
-##        _dt = dt
-#        t += dt
-        d = back.get_distance()
-#        dt = time()
-#        ds = np.append(ds, np.array([[d]]), axis = 0)
-#        ts = np.append(ts, np.array([[t*1000]]), axis = 0)
+#            if d != None:
+#                print("{}:  {:.1f} cm\n".format(label, d))
         
-        if d != None:
-            print("{}:  {:.1f} cm".format(US, d))
-#        if stop:
-#            print("Stopping")
-#            break
+        except Exception:
+            pass
 
     
   
@@ -64,7 +47,6 @@ def US_pooling(US, stop):
 #
 #    try:
 #        dt = time() - dt
-##        _dt = dt
 #        t += dt
 #        d = back.get_distance()
 #        dt = time()
@@ -76,25 +58,45 @@ def US_pooling(US, stop):
 #
 #    except KeyboardInterrupt:
 #        break
-    
+#    
 #plt.plot(ts, ds)
+
+
 USs = [front, back]
+labels = ['front', 'back']
+dct = Manager().dict({l:0.0 for l in labels})
 
-stop = False
-for i, us in zip(range(pool_size), USs):
-    pool.append(Process(target = US_pooling, args=(us, stop,)))
-
+for i, us, l in zip(range(pool_size), USs, labels):
+    pool.append(Process(target = US_pooling, args=(us, l, dct)))
 for p in pool:
     p.daemon = True
     p.start()
+
+
+ds = np.array([[0., 0.]])
+ts = np.array([[0]])
+
+d = back.get_distance()
+
+t = .0
+dt = time()
 while(1):
     try:
-        pass
+        dt = time() - dt
+        t += dt
+        dt = time()
+  
+        d = np.array([dct[l] for l in labels])
+        ds = np.append(ds, d.reshape(1,2), axis = 0)
+        ts = np.append(ts, np.array([[t]]), axis = 0)
+        #print(dct)
+        #sleep(0.05)
     except KeyboardInterrupt:
-            stop = True
-            break
+        break
 
 for p in pool:
-    p.terminate()
+    p.join()
     p.close()
-#pool.map(US_pooling, 2)    
+
+plt.plot(ts,ds)
+plt.grid() 
