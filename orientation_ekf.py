@@ -11,7 +11,7 @@ from LIBRARY.car_es_ekf import ekf
 from LIBRARY.rpi_car_mag_calibration import write_calibration_file
 from LIBRARY.rpi_telemetry import mb_telemetry
 from LIBRARY.rotations import Quaternion, angle_normalize, rpy_jacobian_axis_angle
-
+from LIBRARY.rpi_movement import random_mvmnt
 
 from time import time, sleep
 import numpy as np
@@ -68,7 +68,8 @@ car.init()
 mb = mb_telemetry()
 mb.init_all()
 mb.telemetry()
-
+mvmnt = random_mvmnt(car, mb)
+mvmnt.US_start()
 
 toCalibrate = False 
 attempts = 3
@@ -132,7 +133,7 @@ kf.N = kf.define_N()
 kf.R = kf.define_R()
 print("N:\n{}\nR\n\n{}".format(kf.N, kf.R))
 
-kf.norm = False
+kf.norm = True
 if kf.norm:
     q_t0 = Quaternion(*ws[0]).normalize().to_numpy()
 else:
@@ -195,20 +196,12 @@ while(1):
                       sensors_data = sensors_data)
         else:
             kf.update(f[0], w[0], dts[counter, 0], counter, useFilter = useKF, sensors_data = sensors_data) 
-        try:       
-            if(mb.motors_voltage < voltage_threshold):
-                uv_counter += 1
-                if uv_counter > 4:
-                    motors = car.stop()
-                    rul = car.turn_center()
-                    print("Undervoltage!!")
-                    break 
-            elif (toMove):
-                motors = car.move_forward()
-                rul = car.turn_right()
-                uv_counter = 0   
-        except Exception:
-            pass
+ 
+        if toMove:
+            try:
+                mvmnt.random_mvmnt_obstacle_avoiding()  
+            except Exception:
+                pass
 
         counter += 1
 
@@ -217,8 +210,7 @@ while(1):
         break
 
 
-car.stop()
-car.turn_center()        
+mvmnt.stop_mvmnt(car)       
 
 fig = plt.figure(figsize = (10,10))
 plt.title("pos")

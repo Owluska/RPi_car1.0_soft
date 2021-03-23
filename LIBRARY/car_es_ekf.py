@@ -17,8 +17,8 @@ class ekf:
 
        
 
-        self.g = np.array([0, 0, -9.81])       # gravity
-
+        #self.g = np.array([0, 0, -9.81])       # gravity
+        self.g = np.array([0.,0., 6.500022])
         self.l_jac = np.zeros([9, 9])
         self.l_jac[3:, 3:] = np.eye(6)          # motion model noise jacobian
 

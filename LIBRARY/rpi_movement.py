@@ -26,9 +26,11 @@ class random_mvmnt():
         self.US_pools = []
         self.USs_out = Manager().dict({l:0.0 for l in self.USs_labels}) 
         self.voltage_threshold = 7.6
-        self.US_threshold = 10
+        self.US_threshold = 20
+        self.toSleep = 0.2
         self.car = car
         self.mb = mb
+        self.uv_counter = 0
         
         
     def US_pooling(self, US, label):
@@ -56,19 +58,18 @@ class random_mvmnt():
             p.close()    
     
     def turn_rand(self):
-        r = np.random.randint(low = 0, high = 9)
+        r = np.random.randint(low = 0, high = 3)
         if r == 0:
             self.car.turn_left()
-        elif r == 3:
+        elif r == 1:
             self.car.turn_center()
-        elif r == 6:
+        elif r == 2:
             self.car.turn_right()
     
     def random_mvmnt_obstacle_avoiding(self):        
-        uv_counter = 0
         if(self.mb.motors_voltage < self.voltage_threshold):
-            uv_counter += 1
-            if uv_counter > 4:
+            self.uv_counter += 1
+            if self.uv_counter > 4:
                 self.car.stop()
                 self.car.turn_center()
                 print("Undervoltage!!")
@@ -77,21 +78,21 @@ class random_mvmnt():
                 self.car.move_forward()
                 self.turn_rand()
                 print("Obstacle ahead!")
-                sleep(0.1)
+                sleep(self.toSleep)
                 return 'OA'
         elif(self.USs_out['back'] < self.US_threshold):
                 self.car.move_backward()
                 self.turn_rand()
                 print("Obstacle behind!")
-                sleep(0.1)
+                sleep(self.toSleep)
                 return 'OB'
         else:
                 self.car.move_backward()
                 self.car.turn_center()
-                sleep(0.02)
-                self.car.stop()
-                sleep(0.01)
-                uv_counter = 0
+#                sleep(0.02)
+#                self.car.stop()
+#                sleep(0.01)
+                self.uv_counter = 0
                 return 'OK'       
             
     def stop_mvmnt(self, car):
