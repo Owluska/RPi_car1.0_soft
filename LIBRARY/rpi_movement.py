@@ -25,7 +25,7 @@ class random_mvmnt():
         self.USs_labels = labels
         self.US_pools = []
         self.USs_out = Manager().dict({l:0.0 for l in self.USs_labels}) 
-        self.voltage_threshold = 7.6
+        self.voltage_threshold = 7.0
         self.US_threshold = 20
         self.toSleep = 0.2
         self.car = car

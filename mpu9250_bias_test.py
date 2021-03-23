@@ -10,8 +10,13 @@ from LIBRARY.mpu9250_i2c import mpu6050_conv, AK8963_conv
 import csv
 import numpy as np
 import matplotlib.pyplot as plt
+from time import time
 
 cal_file = 'calibration_data/mpu9250_cal_params.csv'
+
+np.set_printoptions(precision=2)
+np.set_printoptions(suppress=True)
+
 def read_calibration_file(cal_filename):
     cal_offsets = np.array([[],[],[],0.0,0.0,0.0,[],[],[]], dtype = 'object')
     with open(cal_filename,'r',newline='') as csvfile:
@@ -53,13 +58,19 @@ def plot_fig(data, label):
     plt.plot(data)
     plt.grid()    
 
+t = .0
+dt = time()
 data = mpu_calibrated(cal_file).reshape(1,9)
-while(1):
+while(t<3600):
+    dt = time() - dt
+    t += dt
+    dt = time()
     try:
-        vector = mpu_calibrated()
+        vector = mpu_calibrated(cal_file)
         data = np.append(data, vector.reshape(1,9), axis = 0)
     except KeyboardInterrupt:
         break
+    print("time: {:.1f}s, data: {}".format(t, vector))
 
 plot_fig(data[:, 0:3], 'ACC')
 plot_fig(data[:, 3:6], 'W') 

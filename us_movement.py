@@ -60,7 +60,11 @@ def data_to_arrays(telemetry):
     return f,w,m  
             
 
-
+def plot_fig(data, label):
+    fig = plt.figure(figsize = (10,10))
+    plt.title(label)
+    plt.plot(data)
+    plt.grid() 
         
 car = rpi_movement()
 car.init()
