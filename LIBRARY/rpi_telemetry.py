@@ -5,13 +5,11 @@ Created on Sat Dec 12 16:18:38 2020
 
 @author: root
 """
-import wiringpi
-import FaBo9Axis_MPU9250
-#!pip3 install pi-ina219
 from ina219 import INA219
-from time import time, sleep
-#import threading
-#from multiprocessing.pool import ThreadPool
+from mpu9250_i2c import mpu6050_conv, AK8963_conv
+import numpy as np
+import csv
+from time import sleep
 
 class mb_telemetry():
     def __init__(self):
@@ -31,23 +29,8 @@ class mb_telemetry():
         self.rpi_voltage = None
         self.rpi_current = None
         
-        self.US1 = None
-        self.US1_TRIG = 22
-        self.US1_ECHO = 17
-        
-        self.US2 = None
-        self.US2_TRIG = 24
-        self.US2_ECHO = 23
-        self.T = 25
-        self.sound_vel=(331.5+0.6*self.T)
-        self.us = 1e-6
-        self.ms = 1e-3
-        self.timeout = 10 * self.ms
-        self.dist1 = None        
-        self.dist2 = None
-        
-        self.mpu = None
         self.g = 9.84
+        
         self.accx = None
         self.accy = None
         self.accz = None
@@ -60,29 +43,15 @@ class mb_telemetry():
         
         self.magx = None
         self.magy = None
-        self.magx_offset = 0
-        self.magx_scale = 1
-        self.magy_offset = 0
-        self.magy_scale = 1
-        self.magz_offset = 0
-        self.magz_scale = 1
+        self.magz = None
+
         
         self.time = 0
         
-#        self.setup_US_ports(self.US1_TRIG,self.US1_ECHO)
-#        self.setup_US_ports(self.US2_TRIG,self.US2_ECHO)
-#        
-#        self.pool = ThreadPool(processes = 3)
-#        self.result = self.pool.apply_async(self.get_distance_loop, (self,))
-        
+        self.file = 'calibration_data/mpu9250_cal_params.csv'       
+        self.offsets = self.read_calibration_file()
 
         
-    def setup_mpu9250(self):
-        try:
-            self.imu=FaBo9Axis_MPU9250.MPU9250()
-        except Exception:
-            self.imu=None
-        return self.imu    
 
     
     def setup_ina219(self, adress):
@@ -93,18 +62,11 @@ class mb_telemetry():
             ina = None
         return ina
     
-    def setup_US_ports(self, triger, echo):
-        wiringpi.pinMode(echo, wiringpi.GPIO.INPUT)
-    
-        wiringpi.pinMode(triger, wiringpi.GPIO.OUTPUT)
-        wiringpi.digitalWrite(triger, wiringpi.GPIO.LOW)
     
     def init_all(self):
         self.ina1 = self.setup_ina219(self.mb_adress)
         self.ina2 = self.setup_ina219(self.dc_adress)
-        self.imu = self.setup_mpu9250()
-        self.US1 = self.setup_US_ports(self.US1_TRIG,self.US1_ECHO)
-        self.US2 = self.setup_US_ports(self.US2_TRIG,self.US2_ECHO)
+
     
     def get_data_ina219(self, ina):
         if ina != None:
@@ -114,138 +76,54 @@ class mb_telemetry():
         else:
             return None, None
 
-    def get_mpu9250_acc(self):
-        if self.imu != None:
-            acc = self.imu.readAccel()
-            #self.g = 1
-            self.accx = acc['x'] 
-            self.accy = acc['y'] 
-            self.accz = acc['z']
-#            return self.accx, self.accy, self.accz
-#        else:
-#            return None, None, None
-        
-    def get_mpu9250_gyro(self):
-        if self.imu != None:
-            gyro = self.imu.readGyro()
-            self.gyrox = gyro['x'] * self.D2R
-            self.gyroy = gyro['y'] * self.D2R
-            self.gyroz = gyro['z'] * self.D2R
-#            return self.gyrox, self.gyroy, self.gyroz
-#        else:
-#            return None, None, None
-    
-    def get_mpu9250_mag(self):
-        if self.imu != None:
-            mag = self.imu.readMagnet()
-            self.magx = round((mag['x'] - self.magx_offset) * self.magx_scale, 3)
-            self.magy = round((mag['y'] - self.magy_offset) * self.magy_scale, 3)
-            self.magz = round((mag['z'] - self.magz_offset) * self.magz_scale, 3)
-#            return self.magx, self.magy, self.magz
-#        else:
-#            return None, None, None
+    def get_mpu9250_data(self):
+            self.accx,self.accy,self.accz,self.gyrox,self.gyroy,self.gyroz = mpu6050_conv() # read and convert mpu6050 data
+            self.magx,self.magy,self.magz = AK8963_conv()
+            return np.array([self.accx,self.accy,self.accz,self.gyrox,self.gyroy,self.gyroz,self.magx,self.magy,self.magz])
+       
+
+
+    def calibrated_mpu9250(self):
+        raw  = self.get_mpu9250_data()
+         
+        mpu_cal = np.zeros_like(raw)
+        cal_rot_indicies = [[6,7],[7,8],[6,8]] # heading indices
+        for i in range(3):   
+            mpu_cal[i] = self.offsets[i][0]*raw[i]+ self.offsets[i][1]
+        for i in range(3,6):
+            mpu_cal[i] = raw[i] - self.offsets[i]
+        for i in range(6,9):
+            j = i-6
+            mpu_cal[i] = raw[i] - self.offsets[cal_rot_indicies[j][0]]
+        self.accx,self.accy,self.accz,self.gyrox,self.gyroy,self.gyroz,self.magx,self.magy,self.magz = mpu_cal
+        return mpu_cal          
     
     
-    def get_distance(self, US):
-#        sleep(0.38)
-#        sleep(0.05)
-        pulse_start = 0
-        pulse_end = 0
-        if US == 1:
-            triger = self.US1_TRIG
-            echo = self.US1_ECHO            
-        elif US == 2:
-            triger = self.US2_TRIG
-            echo = self.US2_ECHO
-        
-        wiringpi.digitalWrite(triger, wiringpi.GPIO.LOW)
-        sleep(0.05)
-        
-        wiringpi.digitalWrite(triger, wiringpi.GPIO.HIGH)
-        sleep(10*self.us)
-        wiringpi.digitalWrite(triger, wiringpi.GPIO.LOW)
-        
-        start_time = time()
-        while(wiringpi.digitalRead(echo) == wiringpi.GPIO.LOW):
-            pulse_start = time()
-            if(pulse_start - start_time > self.timeout):
-                break
-            
-        start_time = time()
-        while(wiringpi.digitalRead(echo) == wiringpi.GPIO.HIGH):
-            pulse_end = time()
-            if(pulse_end - start_time > self.timeout):
-                break
-    
-     
-        distance = self.sound_vel * (pulse_end - pulse_start) *0.5*100
-        distance = abs(round(distance, 2))
-        
-           
-        if distance < 0 or distance > self.sound_vel * (self.timeout) * 100:
-                distance = None            
-        return distance
-    
-#    def get_distance_loop(self):
-#        while(1):
-#            self.dist1 = self.pool.apply_async(self.get_distance, (1)).get(timeout = 1)        
-#            self.dist2 = self.pool.apply_async(self.get_distance, (2)).get(timeout = 1)
-#            print(self.dist1, self.dist2)
+
+    def read_calibration_file(self):
+        cal_offsets = np.array([[],[],[],0.0,0.0,0.0,[],[],[]], dtype = 'object')
+        with open(self.file,'r',newline='') as csvfile:
+            reader = csv.reader(csvfile,delimiter=',')
+            iter_ii = 0
+            for row in reader:
+                if len(row)>2:
+                    row_vals = [float(ii) for ii in row[int((len(row)/2)+1):]]
+                    cal_offsets[iter_ii] = row_vals
+                else:
+                    cal_offsets[iter_ii] = float(row[1])
+                iter_ii+=1
+        return cal_offsets
             
 
-    def telemetry(self):    
-#        self.dist1 = self.pool.apply_async(self.get_distance, (1,)).get(timeout = .5)  
-        self.time = round(self.time, 3)
-        self.dist1 = self.get_distance(1) 
-        
+    def telemetry(self):            
         self.motors_voltage, self.motors_current = self.get_data_ina219(self.ina1)
         sleep(0.020)
         
         self.rpi_voltage, self.rpi_current = self.get_data_ina219(self.ina2)
         sleep(0.020)
         
-        self.get_mpu9250_acc()
+        self.calibrated_mpu9250()
         sleep(0.010)
 
-        self.dist2 = self.get_distance(2)        
-        self.get_mpu9250_gyro()
-        sleep(0.010)
-        
-        self.get_mpu9250_mag()
-        sleep(0.010)
-        
-#        self.dist1 = self.get_distance(1)
-#        sleep(0.038)
-#        self.dist2 = self.get_distance(2)
-#        sleep(0.038)
-   
 
         
-
-
-#      
-#        self.dist2 = self.pool.apply_async(self.get_distance, (2,)).get(timeout = .5)
-
-        
-
-
-        
-    def read_mag_calibration_file(self, path = '/home/pi/Desktop/RPi_car1.0_soft/calibration_data/mag'):
-        mf = open(path)
-        calib_str = mf.read()
-        data = []
-        temp = ''
-        start = calib_str.find('\n') + 1
-        calib_str = calib_str[start:]
-        for c in calib_str:
-            if c ==' ' or c == '\n':
-                data.append(temp)
-                temp = ''
-            temp += c
-#        print(data)     
-        self.magx_offset = float(data[0])
-        self.magx_scale = float(data[1])
-        self.magy_offset = float(data[2])
-        self.magy_scale = float(data[3])
-        self.magz_offset = float(data[4])
-        self.magz_scale = float(data[5])
