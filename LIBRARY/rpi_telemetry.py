@@ -123,7 +123,7 @@ class mb_telemetry():
         sleep(0.020)
         
         self.calibrated_mpu9250()
-        sleep(0.010)
+        sleep(0.020)
 
 
         

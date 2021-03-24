@@ -19,6 +19,8 @@ US2_ECHO = 23
 back = US(trig = US1_TRIG, echo = US1_ECHO)
 front = US(trig = US2_TRIG, echo = US2_ECHO)
 
+#print(back,front)
+
 class random_mvmnt():
     def __init__(self, car, mb, USs = [US(trig = US1_TRIG, echo = US1_ECHO), US(trig = US2_TRIG, echo = US2_ECHO)], labels = ['back', 'front']):
         self.USs = USs
@@ -37,7 +39,7 @@ class random_mvmnt():
         while(1):
             try:
                 d = US.get_distance()
-                #print(self.USs_out)
+                print(self.USs_out)
                 self.USs_out[label] = d        
             except Exception:
                 pass
@@ -66,26 +68,31 @@ class random_mvmnt():
         elif r == 2:
             self.car.turn_right()
     
-    def random_mvmnt_obstacle_avoiding(self):        
-        if(self.mb.motors_voltage < self.voltage_threshold):
-            self.uv_counter += 1
-            if self.uv_counter > 4:
-                self.car.stop()
-                self.car.turn_center()
-                print("Undervoltage!!")
-                return 'UV' 
-        elif(self.USs_out['front'] < self.US_threshold):
-                self.car.move_forward()
-                self.turn_rand()
-                print("Obstacle ahead!")
-                sleep(self.toSleep)
-                return 'OA'
-        elif(self.USs_out['back'] < self.US_threshold):
-                self.car.move_backward()
-                self.turn_rand()
-                print("Obstacle behind!")
-                sleep(self.toSleep)
-                return 'OB'
+    def random_mvmnt_obstacle_avoiding(self):
+        if self.mb.motors_voltage != None:
+            if(self.mb.motors_voltage < self.voltage_threshold):
+                self.uv_counter += 1
+                if self.uv_counter > 4:
+                    self.car.stop()
+                    self.car.turn_center()
+                    print("Undervoltage!!")
+                    return 'UV' 
+        
+        elif self.USs_out['front'] != None:        
+            if(self.USs_out['front'] < self.US_threshold):
+                    self.car.move_forward()
+                    self.turn_rand()
+                    print("Obstacle ahead!")
+                    sleep(self.toSleep)
+                    return 'OA'
+        
+        elif self.USs_out['back'] != None:      
+            if(self.USs_out['back'] < self.US_threshold):
+                    self.car.move_backward()
+                    self.turn_rand()
+                    print("Obstacle behind!")
+                    sleep(self.toSleep)
+                    return 'OB'
         else:
                 self.car.move_backward()
                 self.car.turn_center()
