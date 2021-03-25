@@ -16,6 +16,8 @@ US2_ECHO = 23
 
 back = US(trig = US1_TRIG, echo = US1_ECHO)
 front = US(trig = US2_TRIG, echo = US2_ECHO)
+back.setup_US_ports()
+front.setup_US_ports()
 
 #print(back,front)
 
@@ -36,7 +38,7 @@ class US_multi():
                 #print(self.USs_out)
                 self.USs_out[label] = d        
             except Exception:
-                pass
+                return
 
     def US_start(self):
         pool_size = len(self.USs)

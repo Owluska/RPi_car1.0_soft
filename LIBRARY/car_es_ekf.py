@@ -5,10 +5,7 @@ from LIBRARY.rotations import skew_symmetric, Quaternion
 class ekf:
     def __init__(self):
         
-        self.ROT = np.array([
-       [ 0.99376, -0.09722,  0.05466],
-       [ 0.09971,  0.99401, -0.04475],
-       [-0.04998,  0.04992,  0.9975 ] ])
+        self.ROT = np.eye(3)
 
         
         self.var_f = np.array([0.01,0.01,0.01])

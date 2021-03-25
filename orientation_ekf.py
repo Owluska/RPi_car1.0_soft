@@ -60,7 +60,6 @@ def eulers_mag_acc(spec_force, mag, tilt_comp = True):
     return eulers
 
 def data_to_arrays(telemetry):
-    g = -9.81
     w = np.array([[telemetry.gyrox,telemetry.gyroy, telemetry.gyroz]]) * telemetry.D2R
     f = np.array([[telemetry.accx,telemetry.accy, telemetry.accz]]) * telemetry.g
     m = np.array([[telemetry.magx,telemetry.magy, telemetry.magz]])
@@ -82,7 +81,7 @@ def turn_rand():
     elif r == 2:
         car.turn_right()
 
-def circle_mov_script(mb, uss, uv_counter):
+def circle_mov_script(mb, uss, uv_counter, US_threshold):
     if mb.motors_voltage != None:
         if(mb.motors_voltage < voltage_threshold):
             uv_counter += 1
@@ -117,6 +116,9 @@ def circle_mov_script(mb, uss, uv_counter):
             return 'OK' 
 
 
+
+
+
 car = rpi_movement()
 car.init()
 
@@ -129,43 +131,24 @@ uss.US_start()
 
 voltage_threshold = 6.7
 uv_counter = 0
-state = circle_mov_script(mb, uss, uv_counter) 
+state = circle_mov_script(mb, uss, uv_counter, voltage_threshold) 
 
 sleep(1)
 
-toCalibrate = False 
-attempts = 3
-if toCalibrate:
-  write_calibration_file(car, auto = False, attempts = attempts)
+#toCalibrate = False 
+#attempts = 3
+#if toCalibrate:
+#  write_calibration_file(car, auto = False, attempts = attempts)
   
 
-#mb.read_mag_calibration_file()
-#print("Magnetometer caibration:")    
-#print(mb.magx_offset, mb.magx_scale, mb.magy_offset, mb.magy_scale, mb.magz_offset, mb.magz_scale)
+#bias_m = np.array([206.818,  17.819,   9.807])
+#bias_w = np.array([ 0.027, -0.041,  0.018])
+#bias_f = np.array([-0.531, -0.486,  0.575])
 
-
-# obstacle_threshold = 15
-
-
-
-
-#bias_mag = np.mean(ms, axis=0)
-#var_mag = np.std(ms, axis=0)
-bias_m = np.array([206.818,  17.819,   9.807])
 var_m = np.array([5.774, 1.119, 1.466])
-#bias_ws = np.mean(ws, axis=0)
-#var_w = np.std(ws, axis=0)
-var_w = np.array([0.029, 0.014, 0.012])
-bias_w = np.array([ 0.027, -0.041,  0.018])
-#bias_fs = np.mean(fs * 9.81, axis=0)
-#gravity = np.array([0, 0, -9.81])
-#bias_fs -= gravity
-#var_f = np.std(fs, axis=0)
-var_f = np.array([0.124, 0.065, 0.012])
-bias_f = np.array([-0.531, -0.486,  0.575])
-
-
-es_var = np.array([0.037, 0.061, 0.043])
+var_w = np.array([0.067, 0.107, 0.029])
+var_f = np.array([1.962, 3.31 , 1.603])
+es_var = np.array([2.797, 0.174, 0.675])
 
 
 
@@ -177,9 +160,9 @@ np.set_printoptions(suppress=True)
 
 mb.telemetry()
 fs,ws,ms = data_to_arrays(mb)
-fs -= bias_f
-ws -= bias_w
-ms -= bias_m
+#fs -= bias_f
+#ws -= bias_w
+#ms -= bias_m
 es = np.array(eulers_mag_acc(fs, ms)).reshape(1,3)
 dt = time()
 ts = np.zeros([1,1])
@@ -189,6 +172,7 @@ kf = ekf()
 kf.var_f = var_f
 kf.var_w = var_w
 kf.var_m = var_m
+
 kf.N = kf.define_N()
 kf.R = kf.define_R()
 print("N:\n{}\nR\n\n{}".format(kf.N, kf.R))
@@ -198,7 +182,8 @@ if kf.norm:
     q_t0 = Quaternion(*ws[0]).normalize().to_numpy()
 else:
     q_t0 = Quaternion(*ws[0]).to_numpy()
-kf.ROT =  Quaternion(*q_t0).to_mat()
+#kf.ROT =  Quaternion(*q_t0).to_mat()
+kf.ROT =  np.eye(3)
 
 p_cov_t0 = np.ones(9) * 0.01
 ps_t0 = np.zeros([1,3])
@@ -210,8 +195,6 @@ print("ROT\n:{}\n".format(kf.ROT))
 np.set_printoptions(precision=3)
 np.set_printoptions(suppress=True)
 useKF = True
-
-
 
 sensors_data = np.zeros([1,9])
 sdata = 'Time x y z'
@@ -226,7 +209,7 @@ while(1):
     try:
         dt = time() - dt
         dts = np.append(dts, np.array([[dt]]), axis = 0)
-#        _dt = dt
+
         mb.time += dt
         ts = np.append(dts, np.array([[mb.time]]), axis = 0)
         dt = time()
@@ -235,31 +218,29 @@ while(1):
         
         mb.telemetry()
         f,w,m = data_to_arrays(mb)
-        f -= bias_f
-        w -= bias_w
-        m -= bias_m
+#        f -= bias_f
+#        w -= bias_w
+#        m -= bias_m
         
-        
-        #m = angle_normalize(m)
+
         e = np.array(eulers_mag_acc(f, m, tilt_comp = False)).reshape(1,3)
         es = np.append(es, e, axis = 0)
         ws = np.append(ws, w.reshape(1,3), axis = 0)
         fs = np.append(fs, f.reshape(1,3), axis = 0)
         ms = np.append(ms, m.reshape(1,3), axis = 0)
-        #print(kf.p_est[counter])
+        print(kf.p_est[counter])
         
         if useKF:
-
             sensors_data[0, 6:] = e
             kf.update(fs[0], ws[0], dts[counter, 0], counter,
                       useFilter = useKF,
                       sensors_data = sensors_data)
         else:
-            kf.update(f[0], w[0], dts[counter, 0], counter, useFilter = useKF, sensors_data = sensors_data) 
+            kf.update(f[0], w[0], ts[counter, 0], counter, useFilter = useKF, sensors_data = sensors_data) 
  
         if toMove:
             try:
-                state = circle_mov_script(mb, uss, uv_counter) 
+                state = circle_mov_script(mb, uss, uv_counter, voltage_threshold) 
             except Exception as e:
                 template = "An exception of type {0} occured. Arguments:\n{1!r}"
                 message = template.format(type(e).__name__, e.args)
@@ -269,6 +250,9 @@ while(1):
 
 
     except KeyboardInterrupt:
+        template = "An exception of type {0} occured. Arguments:\n{1!r}"
+        message = template.format(type(e).__name__, e.args)
+        print(message)
         break
 
 
@@ -287,19 +271,3 @@ fig = plt.figure(figsize = (10,10))
 plt.title("vels")
 plt.plot(kf.v_est[:, :2])
 plt.grid()
-
-  
-#fig = plt.figure(figsize = (10,10))
-#plt.title("Mag")
-#plt.plot(ms)
-#plt.grid()
-#
-#fig1 = plt.figure(figsize = (10,10))
-#plt.title("Acc")
-#plt.plot(fs) 
-#plt.grid()
-#
-#fig2 = plt.figure(figsize = (10,10))
-#plt.title("Gyro")
-#plt.plot(ws)
-#plt.grid()

@@ -20,6 +20,7 @@ class US:
         self.dist = None        
 
     def setup_US_ports(self):
+        wiringpi.wiringPiSetupGpio()
         wiringpi.pinMode(self.US_ECHO, wiringpi.GPIO.INPUT)
     
         wiringpi.pinMode(self.US_TRIG, wiringpi.GPIO.OUTPUT)
