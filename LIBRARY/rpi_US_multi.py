@@ -52,6 +52,7 @@ class US_multi():
     
     def USs_stop(self):
         for p in self.US_pools:
-            p.join()
-            p.close()    
+            print("stopping {}".format(p))
+            p.terminate()
+            #p.close()    
       

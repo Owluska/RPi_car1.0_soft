@@ -116,11 +116,11 @@ class mb_telemetry():
             
 
     def telemetry(self):            
-#        self.motors_voltage, self.motors_current = self.get_data_ina219(self.ina1)
-#        sleep(0.020)
-#        
-#        self.rpi_voltage, self.rpi_current = self.get_data_ina219(self.ina2)
-#        sleep(0.020)
+        self.motors_voltage, self.motors_current = self.get_data_ina219(self.ina1)
+        sleep(0.020)
+        
+        self.rpi_voltage, self.rpi_current = self.get_data_ina219(self.ina2)
+        sleep(0.020)
         
         self.calibrated_mpu9250()
         #sleep(0.020)
