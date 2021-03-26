@@ -69,20 +69,38 @@ def data_to_arrays(telemetry):
     return f,w,m
 
 
-def plot_fig(data, label):
+def plot_fig(data, label, legend = ['x','y','z']):
     fig = plt.figure(figsize = (10,10))
     plt.title(label)
     plt.plot(data)
+    plt.legend(legend)
     plt.grid() 
 
-def average_measurment(samples, counter_value, raw, averaged):        
+def average_measurments(samples, counter_value, raw, averaged, atype = 'mean'):        
         if counter_value % samples == 0:
             i = counter_value - samples
-            d  = np.mean(raw[i:, :], axis = 0)
+            if atype == 'average':
+                weights = np.power(10, np.abs(raw[i:, :])*-10)
+                d  = np.average(raw[i:, :], axis = 0, weights = weights)
+            elif atype == 'median':
+                d = np.median(raw[i:, :], axis = 0)
+            else:
+                d = np.mean(raw[i:, :], axis = 0)
             averaged = np.append(averaged, d.reshape(1,3), axis = 0)
             return averaged
         else:
             return averaged
+
+def average_measurment(samples, counter_value, raw, atype = 'mean'):        
+            i = counter_value - samples
+            if atype == 'average':
+                weights = np.power(10, np.abs(raw[i:, :])*-10)
+                d  = np.average(raw[i:, :], axis = 0, weights = weights)
+            elif atype == 'median':
+                d = np.median(raw[i:, :], axis = 0)
+            else:
+                d = np.mean(raw[i:, :], axis = 0)
+            return d
 #movment
 def turn_rand():
     r = np.random.randint(low = 0, high = 3)
@@ -95,12 +113,14 @@ def turn_rand():
         
 
 
-def check_US(USs, us, US_threshold = 20):
+def check_US(USs, us, US_threshold1 = 20, US_threshold2 = 50):
     labels = ['back', 'front']
     if USs.USs_out[labels[us]] == None:
         return 'us_' + labels[us] + '_none'
-    elif USs.USs_out[labels[us]] < US_threshold:
+    elif USs.USs_out[labels[us]] < US_threshold1:
         return 'obstacle_' + labels[us]
+    elif USs.USs_out[labels[us]] < US_threshold2:
+        return 'target' + labels[us]
     else:
         return 'us_' + labels[us] + '_ok'
 
@@ -112,9 +132,11 @@ def check_voltage(mb, voltage_threshold = 7.0):
     else:
         return 'voltage_ok'
 
-def circle_mov_script(mb, uss, uv_counter):
+def fromUS_mov_script(mb, uss, uv_counter):
     template = "{}:{}:{}:{}"
     voltage_state = check_voltage(mb)
+    us_front_state = check_US(uss, 0)
+    us_back_state = check_US(uss, 1)
     
     if voltage_state == 'undervoltage':
         uv_counter += 1
@@ -125,28 +147,25 @@ def circle_mov_script(mb, uss, uv_counter):
         else:
             voltage_state = 'voltage_ok'
         
-    us_front_state = check_US(uss, 0)
-    
-    if us_front_state.find('obstacle') != -1:
-        mvmnt_state = car.move_backward()
-        turn_rand()
-        sleep(0.2)
-        mvmnt_state += ':' + car.turn_center()
-    
-    us_back_state = check_US(uss, 1)   
-    if us_back_state.find('obstacle') != -1:    
+    if us_front_state.find('target') != -1:
         mvmnt_state = car.move_forward()
-        turn_rand()
-        sleep(0.2)
-        mvmnt_state += ':' + car.turn_center()
-    
+        rot_state = turn_rand()
+        sleep(0.5)
+        mvmnt_state += ':' + rot_state
+        uv_counter = 0
+    elif us_back_state.find('target') != -1:    
+        mvmnt_state = car.move_backward()
+        rot_state = turn_rand()
+        sleep(0.5)
+        mvmnt_state += ':' + rot_state
+        uv_counter = 0
     else:
-            mvmnt_state = car.move_backward()
-            mvmnt_state += ':' + car.turn_center()
+        mvmnt_state = car.stop()
+        mvmnt_state += ':' + car.turn_center()
 #                sleep(0.02)
 #                self.car.stop()
 #                sleep(0.01)
-            uv_counter = 0
+        uv_counter = 0
     return template.format(voltage_state, us_front_state,\
                            us_back_state, mvmnt_state)
 
@@ -166,9 +185,9 @@ uss.US_start()
 
 #starts movemtnt before kalman init
 uv_counter = 0
-state = circle_mov_script(mb, uss, uv_counter) 
+state = fromUS_mov_script(mb, uss, uv_counter) 
 
-sleep(1)
+sleep(2)
 
 #sensors variances
 var_m = np.array([5.774, 1.119, 1.466])
@@ -201,9 +220,9 @@ print("N:\n{}\nR\n\n{}".format(kf.N, kf.R))
 
 kf.norm = True
 if kf.norm:
-    q_t0 = Quaternion(*ws[0]).normalize().to_numpy()
+    q_t0 = Quaternion(axis_angle=ws[0]).normalize().to_numpy()
 else:
-    q_t0 = Quaternion(*ws[0]).to_numpy()
+    q_t0 = Quaternion(axis_angle = ws[0]).to_numpy()
 #kf.ROT =  Quaternion(*q_t0).to_mat()
 kf.ROT =  np.eye(3)
 
@@ -211,20 +230,26 @@ p_cov_t0 = np.ones(9) * 0.01
 ps_t0 = np.zeros([1,3])
 vs_t0 = np.zeros([1,3])
 kf.init_data(ps_t0, vs_t0, q_t0, p_cov_t0)
+
 print("ROT\n:{}\n".format(kf.ROT))
 
 #set print options
 np.set_printoptions(precision=3)
 np.set_printoptions(suppress=True)
 # Use correction?
-useKF = True
+useKF = False
 #data label
-sdata = 'Time x y z'
-print(sdata)
+#sdata = 'Time x y z'
+templ = "time: {:.2f}s pos: {:.1f}m {:.1f}m {:.1f}m\t"
+leg = ['x', 'y', 'z']
+#print(sdata)
 
 #move?
 toMove = True
 counter = 0
+samples = 1 
+av_type = 'mean'
+k = 0
 while(1):
     if counter > 500:
         break
@@ -258,27 +283,26 @@ while(1):
         fs = np.append(fs, f.reshape(1,3), axis = 0)
         ms = np.append(ms, m.reshape(1,3), axis = 0)
         
-        _fs = average_measurment(samples = 10, counter_value = counter, raw = fs, averaged = _fs)
-        _ws = average_measurment(samples = 10, counter_value = counter, raw = ws, averaged = _ws)
+        _fs = average_measurments(samples = samples, counter_value = counter, raw = fs, averaged = _fs, atype=av_type)
+        _ws = average_measurments(samples = samples, counter_value = counter, raw = ws, averaged = _ws, atype=av_type)
         
-#        if counter%15 == 0:
-#            i = counter - 10
-#            _f = np.mean(fs[i:, :], axis = 0)
-#            _fs = np.append(_fs, _f.reshape(1,3), axis = 0)
-        
-        print(dts[counter], kf.p_est[counter], end = '\t')
-        
-        if useKF:
-            sensors_data[0, 6:] = e
-            kf.update(fs[0], ws[0], dt, counter,
-                      useFilter = useKF,
-                      sensors_data = sensors_data)
-        else:
-            kf.update(f[0], w[0], dt, counter, useFilter = useKF, sensors_data = sensors_data) 
+
+        print(templ.format(dt, *kf.p_est[k]), end = '')
+        if counter % samples == 0:
+            _f = average_measurment(samples = samples, counter_value = counter, raw = fs, atype=av_type)
+            _w = average_measurment(samples = samples, counter_value = counter, raw = ws, atype=av_type)
+            if useKF:
+                sensors_data[0, 6:] = e
+                kf.update(_f, _w, dt, k,
+                          useFilter = useKF,
+                          sensors_data = sensors_data)
+            else:
+                kf.update(_f, _w, dt, k, useFilter = useKF, sensors_data = sensors_data) 
+            k += 1
  
         if toMove:
             try:
-                state = circle_mov_script(mb, uss, uv_counter)
+                state = fromUS_mov_script(mb, uss, uv_counter)
                 print(state)
             except Exception as e:
                 template = "An exception of type {0} occured. Arguments:\n{1!r}"
@@ -301,14 +325,16 @@ while(1):
 uss.USs_stop()
 car.turn_center()
 car.stop()
-     
+print("Summ time: {:.3f} s".format(np.sum(dts)))     
 plot_fig(kf.p_est[:, :2], 'pos')
 plot_fig(kf.v_est[:, :2], 'vel')
+plot_fig(kf.a, 'acc')
 
 fig = plt.figure(figsize = (10,10))
 
 x = kf.p_est[:, 0]
 y = kf.p_est[:, 1]
+plt.title('x(y)')
 plt.plot(x, y)
 plt.grid()
 

@@ -6,7 +6,7 @@ class ekf:
     def __init__(self):
         
         self.ROT = np.eye(3)
-
+        self.acc_tol = 1.0
         
         self.var_f = np.array([0.01,0.01,0.01])
         self.var_w = np.array([0.01,0.01,0.01])
@@ -120,11 +120,18 @@ class ekf:
         self.ROT = q_prev.to_mat()
         #print(self.ROT)
         a = self.ROT @ f + self.g
+        
 
         self.a = np.append(self.a, a.reshape(1,3), axis = 0)
         
+        self.v_est[k] = np.where(abs(self.a[k]) >= self.acc_tol, self.v_est[k], 0.00)
+        self.p_est[k] = np.where(abs(self.a[k]) >= self.acc_tol, self.p_est[k], 0.00)
+        
         p = self.p_est[k] + dt * self.v_est[k] + 0.5 * dt ** 2 * a
-        v = self.v_est[k] + dt * a
+        
+        
+        v =  dt * self.a[k] + self.v_est[k]
+        #print("k {} dt:{:.2f} v:{:.2f} {:.2f} {:.2f} a:{:.2f} {:.2f} {:.2f} p:{:.2f} {:.2f} {:.2f}".format(k, dt, *a, *p, *v))
 #        v_loc = np.array([float(od), 0, 0])
 #        v = self.ROT @ v_loc
 
@@ -133,7 +140,6 @@ class ekf:
         qw = Quaternion(axis_angle=angle).quat_mult_left(q_prev)
         #qw = Quaternion(axis_angle=angle).quat_mult_right(q_prev)
         #qw = q_prev.quat_mult_left(Quaternion(axis_angle=angle))
-        q = Quaternion(*qw).normalize().to_numpy()
         if self.norm:
             q = Quaternion(*qw).normalize().to_numpy()
         else:
