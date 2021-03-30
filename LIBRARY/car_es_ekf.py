@@ -117,6 +117,7 @@ class ekf:
         else:
             q_prev = Quaternion(*self.q_est[k])
         
+        #print()
         self.ROT = q_prev.to_mat()
         #print(self.ROT)
         a = self.ROT @ f + self.g
@@ -124,10 +125,10 @@ class ekf:
 
         self.a = np.append(self.a, a.reshape(1,3), axis = 0)
         
-        self.v_est[k] = np.where(abs(self.a[k]) >= self.acc_tol, self.v_est[k], 0.00)
-        self.p_est[k] = np.where(abs(self.a[k]) >= self.acc_tol, self.p_est[k], 0.00)
+#        self.v_est[k] = np.where(abs(self.a[k]) >= self.acc_tol, self.v_est[k], 0.00)
+#        self.p_est[k] = np.where(abs(self.a[k]) >= self.acc_tol, self.p_est[k], 0.00)
         
-        p = self.p_est[k] + dt * self.v_est[k] + 0.5 * dt ** 2 * a
+        p = self.p_est[k] + dt * self.v_est[k] + 0.5 * dt ** 2 * self.a[k]
         
         
         v =  dt * self.a[k] + self.v_est[k]

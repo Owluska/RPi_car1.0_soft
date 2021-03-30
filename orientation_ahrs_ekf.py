@@ -7,57 +7,16 @@ Created on Mon Feb  1 15:01:38 2021
 # import numpy as np
 # # import scipy as sc
 from LIBRARY.rpi_car import rpi_movement
-from LIBRARY.car_es_ekf import ekf
-#from LIBRARY.rpi_car_mag_calibration import write_calibration_file
 from LIBRARY.rpi_telemetry import mb_telemetry
-from LIBRARY.rotations import Quaternion, angle_normalize
 from LIBRARY.rpi_US_multi import US_multi
 
 from time import time, sleep
 import numpy as np
 from math import sqrt, sin, cos, atan2
 import matplotlib.pyplot as plt
+from ahrs.filters import EKF
+from scipy.spatial.transform import Rotation as R
 
-#def plot_data_n_labels(x, ys, title = '', xlabel = '',
-#                       ylabel = '', legend =None):
-#    fig = plt.figure(figsize = (10,10))
-#    
-#    for y in ys:
-#        plt.plot(x,y)
-#    plt.title(title)
-#    plt.xlabel(xlabel)
-#    plt.ylabel(ylabel)
-#    plt.grid()
-#    
-#    if legend != None:
-#        plt.legend(legend)
-
-#data processing n plot
-def eulers_mag_acc(spec_force, mag, tilt_comp = True):
-    l = mag.shape[0]
-    
-    eulers = np.zeros([l, 3])
-    for f,m,i in zip(spec_force, mag, range(l)):
-        ax = f[0]
-        ay = f[1]
-        az = f[2]
-        
-        roll = atan2(ay, sqrt(ay ** 2 + az **2))
-        pitch = atan2(-ax, sqrt(ay ** 2 + az **2))
-        
-        #m = angle_normalize(m)
-        mx = m[0]
-        my = m[1]
-        mz = m[2]
-        if tilt_comp:
-        
-            Mx = mx * cos(pitch) + mz * sin(pitch)
-            My = mx * sin(roll) * sin(pitch) + my * cos(roll) - mz * sin(roll) * cos(pitch)
-            yaw = atan2(My, Mx)
-        else:
-            yaw = atan2(-my, mx)
-        eulers[i] = [roll, pitch, yaw]
-    return eulers
 
 def data_to_arrays(telemetry):
     w = np.array([[telemetry.gyrox,telemetry.gyroy, telemetry.gyroz]]) * telemetry.D2R
@@ -113,7 +72,7 @@ def turn_rand():
         
 
 
-def check_US(USs, us, US_threshold1 = 30, US_threshold2 = 40):
+def check_US(USs, us, US_threshold1 = 20, US_threshold2 = 50):
     labels = ['back', 'front']
     if USs.USs_out[labels[us]] == None:
         return 'us_' + labels[us] + '_none'
@@ -133,40 +92,41 @@ def check_voltage(mb, voltage_threshold = 7.0):
         return 'voltage_ok'
 
 def fromUS_mov_script(mb, uss, uv_counter):
-    template = "{}:{}:{}:{}:{}"
-    keys = ['motors_power', 'front_us', 'back_us', 'velocity_state', 'rul_pos']
-    s_dic = {k:'' for k in keys}
-    s_dic['motors_power'] = check_voltage(mb)
-    s_dic['front_us'] = check_US(uss, 0)
-    s_dic['back_us'] = check_US(uss, 1)
+    template = "{}:{}:{}:{}"
+    voltage_state = check_voltage(mb)
+    us_front_state = check_US(uss, 0)
+    us_back_state = check_US(uss, 1)
     
-    if s_dic['motors_power'] == 'undervoltage':
+    if voltage_state == 'undervoltage':
         uv_counter += 1
         if uv_counter > 4:
-            s_dic['velocity_state'] = car.stop()
-            s_dic['rul_pos'] = car.turn_center()
-            s_dic['motors_power'] = 'undervoltage'
+            mvmnt_state = car.stop()
+            mvmnt_state += ':' + car.turn_center()
+            voltage_state = 'undervoltage'
         else:
-            s_dic['motors_power'] = 'voltage_ok'
+            voltage_state = 'voltage_ok'
         
-    if s_dic['front_us'].find('target') != -1:
-        s_dic['velocity_state'] = car.move_forward()
-        s_dic['rul_pos'] = turn_rand()
+    if us_front_state.find('target') != -1:
+        mvmnt_state = car.move_forward()
+        rot_state = turn_rand()
         sleep(0.5)
+        mvmnt_state += ':' + rot_state
         uv_counter = 0
-    elif s_dic['back_us'].find('target') != -1:    
-        s_dic['velocity_state'] = car.move_backward()
-        s_dic['rul_pos'] = turn_rand()
+    elif us_back_state.find('target') != -1:    
+        mvmnt_state = car.move_backward()
+        rot_state = turn_rand()
         sleep(0.5)
+        mvmnt_state += ':' + rot_state
         uv_counter = 0
     else:
-        s_dic['velocity_state'] = car.stop()
-        s_dic['rul_pos'] = car.turn_center()
+        mvmnt_state = car.stop()
+        mvmnt_state += ':' + car.turn_center()
 #                sleep(0.02)
 #                self.car.stop()
 #                sleep(0.01)
         uv_counter = 0
-    return template.format(*s_dic.values()), s_dic
+    return template.format(voltage_state, us_front_state,\
+                           us_back_state, mvmnt_state)
 
 
 
@@ -184,16 +144,20 @@ uss.US_start()
 
 #starts movemtnt before kalman init
 uv_counter = 0
-state, dic = fromUS_mov_script(mb, uss, uv_counter) 
+state = fromUS_mov_script(mb, uss, uv_counter) 
 
 sleep(2)
 
 #sensors variances
-var_m = np.array([5.774, 1.119, 1.466])
-var_w = np.array([0.067, 0.107, 0.029])
-var_f = np.array([1.962, 3.31 , 1.603])
-es_var = np.array([2.797, 0.174, 0.675])
+stds_m = np.array([5.774, 1.119, 1.466])
+stds_w = np.array([0.067, 0.107, 0.029])
+stds_f = np.array([1.962, 3.31 , 1.603])
+es_stds = np.array([2.797, 0.174, 0.675])
 
+
+std_f = np.max(stds_f)
+std_w = np.max(stds_w)
+std_m = np.max(stds_m)
 #init data
 mb.telemetry()
 fs,ws,ms = data_to_arrays(mb)
@@ -202,41 +166,17 @@ _ws = np.copy(ws)
 #fs -= bias_f
 #ws -= bias_w
 #ms -= bias_m
-es = np.array(eulers_mag_acc(fs, ms)).reshape(1,3)
 t = time()
 ts = np.zeros([1,1])
 dts = np.zeros([1,1])
-sensors_data = np.zeros([1,9])
+
 #create n init kalman
-kf = ekf()
-kf.var_f = var_f
-kf.var_w = var_w
-kf.var_m = var_m
-
-kf.N = kf.define_N()
-kf.R = kf.define_R()
-print("N:\n{}\nR\n\n{}".format(kf.N, kf.R))
-
-kf.norm = True
-if kf.norm:
-    q_t0 = Quaternion(axis_angle=ws[0]).normalize().to_numpy()
-else:
-    q_t0 = Quaternion(axis_angle = ws[0]).to_numpy()
-#kf.ROT =  Quaternion(*q_t0).to_mat()
-kf.ROT =  np.eye(3)
-
-p_cov_t0 = np.ones(9) * 0.01
-ps_t0 = np.zeros([1,3])
-vs_t0 = np.zeros([1,3])
-kf.init_data(ps_t0, vs_t0, q_t0, p_cov_t0)
-
-print("ROT\n:{}\n".format(kf.ROT))
+ekf = EKF(gyr = ws, acc = fs, mag = ms, noises = [std_w, std_f, std_m])
 
 #set print options
 np.set_printoptions(precision=3)
 np.set_printoptions(suppress=True)
-# Use correction?
-useKF = False
+
 #data label
 #sdata = 'Time x y z'
 templ = "time: {:.2f}s pos: {:.1f}m {:.1f}m {:.1f}m\t"
@@ -249,6 +189,13 @@ counter = 0
 samples = 1 
 av_type = 'mean'
 k = 0
+
+ps = np.zeros((1,3))
+vs = np.zeros((1,3))
+accs = np.zeros((1,3))
+
+q = np.array([[1,0,0,0]])
+g = np.array([[0,0,-9.8]])
 while(1):
     if counter > 500:
         break
@@ -274,10 +221,8 @@ while(1):
 #        w -= bias_w
 #        m -= bias_m
         
-        ts = np.append(ts, np.array([[mb.time]]), axis = 0)
+        ts = np.append(dts, np.array([[mb.time]]), axis = 0)
         dts = np.append(dts, np.array([[dt]]), axis = 0)
-        e = np.array(eulers_mag_acc(f, m, tilt_comp = False)).reshape(1,3)
-        es = np.append(es, e, axis = 0)
         ws = np.append(ws, w.reshape(1,3), axis = 0)
         fs = np.append(fs, f.reshape(1,3), axis = 0)
         ms = np.append(ms, m.reshape(1,3), axis = 0)
@@ -286,26 +231,29 @@ while(1):
         _ws = average_measurments(samples = samples, counter_value = counter, raw = ws, averaged = _ws, atype=av_type)
         
 
-        print(templ.format(dt, *kf.p_est[k]), end = '')
+        print(templ.format(dt, *ps[k]), end = '')
         if counter % samples == 0:
             _f = average_measurment(samples = samples, counter_value = counter, raw = fs, atype=av_type)
             _w = average_measurment(samples = samples, counter_value = counter, raw = ws, atype=av_type)
-            if dic['velocity_state'] == 'S':
-                kf.v_est[k] = np.zeros(3)
-                kf.a[k] = np.zeros(3)
-                #print('standing')
-            if useKF:
-                sensors_data[0, 6:] = e
-                kf.update(_f, _w, dt, k,
-                          useFilter = useKF,
-                          sensors_data = sensors_data)
-            else:
-                kf.update(_f, _w, dt, k, useFilter = useKF, sensors_data = sensors_data) 
+            
+            _q = ekf.update(q[k], gyr = _ws[k], acc = _fs[k], mag = ms[k])
+            q = np.append(q, _q.reshape(1,4), axis = 0 )
+#            ROT = R.from_quat(_q).as_matrix()
+#            a  = ROT @ _f - g
+            a = ekf.acc - g
+            p = ps[k] + vs[k] * dt + 1/2 * a * dt ** 2
+            v = vs[k] + a * dt
+            
             k += 1
- 
+
+
+        
+        ps = np.append(ps, p.reshape(1,3), axis = 0)
+        vs = np.append(vs, v.reshape(1,3), axis = 0)
+        accs = np.append(accs, a.reshape(1,3), axis = 0)
         if toMove:
             try:
-                state, dic = fromUS_mov_script(mb, uss, uv_counter)
+                state = fromUS_mov_script(mb, uss, uv_counter)
                 print(state)
             except Exception as e:
                 template = "An exception of type {0} occured. Arguments:\n{1!r}"
@@ -329,14 +277,14 @@ uss.USs_stop()
 car.turn_center()
 car.stop()
 print("Summ time: {:.3f} s".format(np.sum(dts)))     
-plot_fig(kf.p_est[:, :2], 'pos')
-plot_fig(kf.v_est[:, :2], 'vel')
-plot_fig(kf.a, 'acc')
+plot_fig(ps, 'pos')
+plot_fig(vs, 'vel')
+plot_fig(accs, 'acc')
 
 fig = plt.figure(figsize = (10,10))
 
-x = kf.p_est[:, 0]
-y = kf.p_est[:, 1]
+x = ps[:, 0]
+y = ps[:, 1]
 plt.title('x(y)')
 plt.plot(x, y)
 plt.grid()
