@@ -113,14 +113,12 @@ def turn_rand():
         
 
 
-def check_US(USs, us, US_threshold1 = 30, US_threshold2 = 40):
-    labels = ['back', 'front']
+def check_US(USs, us, labels = ['left', 'right'], US_threshold1 = 30):
+
     if USs.USs_out[labels[us]] == None:
         return 'us_' + labels[us] + '_none'
     elif USs.USs_out[labels[us]] < US_threshold1:
         return 'obstacle_' + labels[us]
-    elif USs.USs_out[labels[us]] < US_threshold2:
-        return 'target' + labels[us]
     else:
         return 'us_' + labels[us] + '_ok'
 
@@ -132,13 +130,13 @@ def check_voltage(mb, voltage_threshold = 7.0):
     else:
         return 'voltage_ok'
 
-def fromUS_mov_script(mb, uss, uv_counter):
+def fromUS_mov_script(mb, uss, labels, uv_counter):
     template = "{}:{}:{}:{}:{}"
-    keys = ['motors_power', 'front_us', 'back_us', 'velocity_state', 'rul_pos']
+    keys = ['motors_power', 'left_us', 'right_us', 'velocity_state', 'rul_pos']
     s_dic = {k:'' for k in keys}
     s_dic['motors_power'] = check_voltage(mb)
-    s_dic['front_us'] = check_US(uss, 0)
-    s_dic['back_us'] = check_US(uss, 1)
+    s_dic['left_us'] = check_US(uss, 0, labels)
+    s_dic['right_us'] = check_US(uss, 1, labels)
     
     if s_dic['motors_power'] == 'undervoltage':
         uv_counter += 1
@@ -149,20 +147,19 @@ def fromUS_mov_script(mb, uss, uv_counter):
         else:
             s_dic['motors_power'] = 'voltage_ok'
         
-    if s_dic['front_us'].find('target') != -1:
+    if s_dic['left_us'].find('obstacle') != -1\
+    or s_dic['right_us'].find('obstacle') != -1:     
         s_dic['velocity_state'] = car.move_forward()
-        s_dic['rul_pos'] = turn_rand()
-        sleep(0.5)
-        uv_counter = 0
-    elif s_dic['back_us'].find('target') != -1:    
-        s_dic['velocity_state'] = car.move_backward()
-        s_dic['rul_pos'] = turn_rand()
+        if s_dic['rul_pos'] == 'R' or s_dic['rul_pos'] == 'C':
+            s_dic['rul_pos'] = car.turn_left()
+        elif s_dic['rul_pos'] == 'L':
+            s_dic['rul_pos'] = car.turn_right()
         sleep(0.5)
         uv_counter = 0
     else:
-        s_dic['velocity_state'] = car.stop()
-        s_dic['rul_pos'] = car.turn_center()
-#                sleep(0.02)
+        s_dic['velocity_state'] = car.move_backward()
+        s_dic['rul_pos'] = turn_rand()
+        sleep(0.05)
 #                self.car.stop()
 #                sleep(0.01)
         uv_counter = 0
@@ -178,13 +175,13 @@ car.init()
 #telemetry
 mb = mb_telemetry()
 mb.init_all()
-
-uss = US_multi()
+labels = ['left', 'right']
+uss = US_multi(labels = labels)
 uss.US_start()
 
 #starts movemtnt before kalman init
 uv_counter = 0
-state, dic = fromUS_mov_script(mb, uss, uv_counter) 
+state, dic = fromUS_mov_script(mb, uss, labels, uv_counter) 
 
 sleep(2)
 
@@ -305,7 +302,7 @@ while(1):
  
         if toMove:
             try:
-                state, dic = fromUS_mov_script(mb, uss, uv_counter)
+                state, dic = fromUS_mov_script(mb, uss, labels, uv_counter)
                 print(state)
             except Exception as e:
                 template = "An exception of type {0} occured. Arguments:\n{1!r}"
