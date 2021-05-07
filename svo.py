@@ -12,12 +12,15 @@ import perception_functions as pf
 
 from time import sleep
 
+K = np.array([[7.43335820e+03, 0.00000000e+00, 4.09022733e+02],
+              [0.00000000e+00, 7.92051299e+03, 2.73723391e+02],
+              [0.00000000e+00, 0.00000000e+00, 1.00000000e+00]])
 
 cap1 = cv2.VideoCapture(0)
 cap2 = cv2.VideoCapture(2)
 
 orb = cv2.ORB_create()
-
+ps = []
 while(True):
     
     ret1, frame1 = cap1.read()
@@ -72,8 +75,17 @@ while(True):
     C1 = np.zeros((3,1))
     
     R2 = np.eye(3)
-    C2 = np.zeros([[0.011,.0, .0]]).T
+    C2 = np.array([[0.011,.0, .0]]).T
     Xs = pf.LinearTriangulation(K, R1 = R1, C1 = C1, C2 = C2, R2 = R2, x1 = ps1, x2 = ps2)
+    ps.append(Xs)
+    a = np.zeros(3)
+    if len(ps) > 1:
+        for x1, x0 in zip(ps[-2], ps[-1]):
+            dx = x1 - x0
+            if a.any() > dx:
+                a = dx
+            
+    print(a)
     #print(F)
     #sleep(1)
     key = cv2.waitKey(1) & 0xFF
